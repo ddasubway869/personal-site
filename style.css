@@ -1,0 +1,329 @@
+/* ── Reset & Base ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Dark (default) ───────────────────────────────────── */
+:root,
+html.dark {
+  --bg:        #111110;
+  --surface:   #1c1c1b;
+  --border:    #2e2e2c;
+  --text:      #f0f0ee;
+  --muted:     #7a7a72;
+  --role:      #a0a099;
+  --btn-bg:    #f0f0ee;
+  --btn-text:  #111110;
+  --btn-hover: #ffffff;
+  --pill-hover-bg:   #f0f0ee;
+  --pill-hover-text: #111110;
+  --focus-ring: rgba(240,240,238,.2);
+  --shadow:    0 1px 4px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.4);
+  --radius:    12px;
+  /* avatar fallback */
+  --avatar-bg:   #2e2e2c;
+  --avatar-text: #f0f0ee;
+  /* status colors — keep subtle */
+  --success: #6ee7b7;
+  --error:   #fca5a5;
+}
+
+/* ── Light ────────────────────────────────────────────── */
+html.light {
+  --bg:        #f5f5f3;
+  --surface:   #ffffff;
+  --border:    #e0e0db;
+  --text:      #1a1a1a;
+  --muted:     #6b6b63;
+  --role:      #4a4a44;
+  --btn-bg:    #1a1a1a;
+  --btn-text:  #ffffff;
+  --btn-hover: #000000;
+  --pill-hover-bg:   #1a1a1a;
+  --pill-hover-text: #ffffff;
+  --focus-ring: rgba(0,0,0,.12);
+  --shadow:    0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
+  --avatar-bg:   #e0e0db;
+  --avatar-text: #1a1a1a;
+  --success: #166534;
+  --error:   #991b1b;
+}
+
+/* ── Transition on theme switch ───────────────────────── */
+html { font-size: 16px; }
+body, .card, input, textarea, button, .theme-toggle {
+  transition: background .2s, border-color .2s, color .2s, box-shadow .2s;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  line-height: 1.6;
+}
+
+/* ── Theme Toggle ─────────────────────────────────────── */
+.theme-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.theme-toggle:hover { color: var(--text); border-color: var(--text); }
+
+.theme-toggle svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* Show sun in dark mode, moon in light mode */
+html.dark  .icon-moon { display: none; }
+html.dark  .icon-sun  { display: block; }
+html.light .icon-sun  { display: none; }
+html.light .icon-moon { display: block; }
+
+/* ── Card ─────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  max-width: 480px;
+  width: 100%;
+  padding: 2.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Avatar ───────────────────────────────────────────── */
+.avatar-wrap { margin-bottom: 1.25rem; }
+
+.avatar,
+.avatar-fallback {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+}
+
+.avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--avatar-bg);
+  color: var(--avatar-text);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -.5px;
+}
+
+/* ── Name & Bio ───────────────────────────────────────── */
+.name {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -.4px;
+  text-align: center;
+  margin-bottom: .2rem;
+}
+
+.role {
+  font-size: .875rem;
+  color: var(--role);
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: .9rem;
+}
+
+.bio {
+  font-size: .9375rem;
+  color: var(--muted);
+  text-align: center;
+  max-width: 340px;
+  margin-bottom: 1.5rem;
+}
+
+/* ── Socials ──────────────────────────────────────────── */
+.socials {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .5rem;
+  margin-bottom: 1.75rem;
+}
+
+.socials a {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .4rem .85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  font-size: .8125rem;
+  font-weight: 500;
+  color: var(--text);
+  transition: background .15s, border-color .15s, color .15s;
+}
+
+.socials a:hover {
+  background: var(--pill-hover-bg);
+  border-color: var(--pill-hover-bg);
+  color: var(--pill-hover-text);
+}
+
+.socials svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+/* ── Divider ──────────────────────────────────────────── */
+.divider {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--border);
+  margin-bottom: 1.75rem;
+}
+
+/* ── Recommendations ──────────────────────────────────── */
+.recommendations { width: 100%; margin-bottom: 0; }
+
+.recommendations h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.album-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .75rem;
+}
+
+.album {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: background .15s;
+}
+
+.album:hover { background: var(--border); }
+
+.album-art {
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--border);
+  /* replace with: background-image: url('cover.jpg'); background-size: cover; */
+}
+
+.album-info {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  padding: 0 .6rem .6rem;
+}
+
+.album-title {
+  font-size: .8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.album-artist {
+  font-size: .75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Contact Form ─────────────────────────────────────── */
+.contact { width: 100%; }
+
+.contact h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1.1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  margin-bottom: .9rem;
+}
+
+label {
+  font-size: .8125rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+input, textarea {
+  width: 100%;
+  padding: .55rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: .9375rem;
+  font-family: inherit;
+  transition: border-color .15s, box-shadow .15s;
+  outline: none;
+  resize: vertical;
+}
+
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .6; }
+
+input:focus, textarea:focus {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+button[type="submit"] {
+  width: 100%;
+  margin-top: .25rem;
+  padding: .65rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  font-size: .9375rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+
+button[type="submit"]:hover  { background: var(--btn-hover); }
+button[type="submit"]:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Form Status ──────────────────────────────────────── */
+.form-status {
+  font-size: .875rem;
+  text-align: center;
+  margin-top: .65rem;
+  min-height: 1.25em;
+}
+
+.form-status.success { color: var(--success); }
+.form-status.error   { color: var(--error); }
