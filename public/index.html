@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spinrate</title>
+  <link rel="stylesheet" href="style.css?v=24" />
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="brand">ARVL</a>
+      <div class="header-right">
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <div class="auth-row" id="auth-loggedout">
+          <button class="btn-nav" id="btn-login">Login</button>
+          <button class="btn-nav btn-nav--join" id="btn-register">Join the club</button>
+        </div>
+        <div class="auth-row" id="auth-loggedin" hidden>
+          <span class="user-chip" id="user-chip"></span>
+          <button class="btn-nav btn-spotify" id="btn-spotify" title="Connect Spotify">
+            Connect
+            <svg class="spotify-logo" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+          </button>
+          <button class="btn-nav" id="btn-logout">Log out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main ───────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Search -->
+    <section class="search-section">
+      <h1 class="search-heading">What are you listening to this week?</h1>
+      <p class="search-sub">Search for an album and cast your weekly pick. The most-recommended albums rise to the top.</p>
+      <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          id="search-input"
+          placeholder="Search albums…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      <div class="search-results" id="search-results" hidden></div>
+      <div class="carousel-wrap" id="carousel-wrap" hidden>
+        <div class="carousel-track" id="carousel-track"></div>
+      </div>
+    </section>
+
+    <!-- Picks page (full-viewport, fades in on scroll) -->
+    <div class="picks-page" id="picks-page">
+
+      <!-- My pick (shown when logged in) -->
+      <section class="my-pick-section" id="my-pick-section" hidden>
+        <div class="section-hd">
+          <h2 class="section-title">Your vote this week</h2>
+        </div>
+        <div id="my-pick-inner"></div>
+      </section>
+
+      <!-- Leaderboard -->
+      <section class="lb-section">
+        <div class="section-hd">
+          <h2 class="section-title">This week's picks</h2>
+          <span class="week-label" id="week-label"></span>
+        </div>
+        <div id="leaderboard">
+          <p class="empty-state">No picks yet — be the first!</p>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- ── Login modal ────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-login" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+      <button class="modal-close" data-close="modal-login" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <path d="M18 6 6 18M6 6l12 12"/>
+        </svg>
+      </button>
+      <h2 class="modal-title" id="login-title">Log in</h2>
+      <form id="form-login" novalidate>
+        <div class="field">
+          <label for="l-email">Email</label>
+          <input id="l-email" type="email" placeholder="you@example.com" autocomplete="email" required />
+        </div>
+        <div class="field">
+          <label for="l-pass">Password</label>
+          <input id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="btn btn-submit">Log in</button>
+        <p class="form-status" id="login-status" aria-live="polite"></p>
+      </form>
+      <p class="modal-switch">No account? <button class="link-btn" id="sw-to-reg">Sign up</button></p>
+    </div>
+  </div>
+
+  <!-- ── Register modal ────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-register" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reg-title">
+      <button class="modal-close" data-close="modal-register" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <path d="M18 6 6 18M6 6l12 12"/>
+        </svg>
+      </button>
+      <h2 class="modal-title" id="reg-title">Create account</h2>
+      <form id="form-register" novalidate>
+        <div class="field">
+          <label for="r-email">Email</label>
+          <input id="r-email" type="email" placeholder="you@example.com" autocomplete="email" required />
+        </div>
+        <div class="field">
+          <label for="r-pass">Password</label>
+          <input id="r-pass" type="password" placeholder="At least 8 characters" autocomplete="new-password" required />
+        </div>
+        <button type="submit" class="btn btn-submit">Create account</button>
+        <p class="form-status" id="reg-status" aria-live="polite"></p>
+      </form>
+      <p class="modal-switch">Already have an account? <button class="link-btn" id="sw-to-login">Log in</button></p>
+    </div>
+  </div>
+
+  <!-- ── Mini player ────────────────────────────────────── -->
+  <div class="mp-tray" id="mp-tray">
+    <div class="mp-tracklist" id="mp-tracklist" hidden></div>
+    <div class="mini-player" id="mini-player" hidden>
+      <img class="mp-art" id="mp-art" src="" alt="" role="button" title="Open album">
+      <div class="mp-info">
+        <span class="mp-track" id="mp-track"></span>
+        <div class="mp-stars" id="mp-stars">
+          <button class="mp-star" data-value="1">★</button>
+          <button class="mp-star" data-value="2">★</button>
+          <button class="mp-star" data-value="3">★</button>
+          <button class="mp-star" data-value="4">★</button>
+          <button class="mp-star" data-value="5">★</button>
+        </div>
+      </div>
+      <button class="mp-btn mp-btn--main" id="mp-playpause" aria-label="Play / Pause">▶</button>
+      <button class="mp-btn" id="mp-next" aria-label="Next">⏭</button>
+    </div>
+  </div>
+
+  <!-- ── Toast ──────────────────────────────────────────── -->
+  <div class="toast" id="toast" aria-live="assertive"></div>
+
+  <!-- ── Search results panel ───────────────────────────── -->
+  <div class="sp-overlay" id="sp-overlay" hidden></div>
+  <aside class="search-panel" id="search-panel" hidden aria-label="Search results">
+    <div class="sp-inner">
+      <div class="sp-header">
+        <button class="sp-back-btn" id="sp-back-btn" aria-label="Back to search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+        </button>
+        <span class="sp-heading" id="sp-heading"></span>
+      </div>
+      <div class="sp-body" id="sp-body">
+        <p class="sp-loading">Searching…</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Artist panel ───────────────────────────────────── -->
+  <aside class="album-panel artist-panel" id="artist-panel" hidden aria-label="Artist details">
+    <div class="ap-inner" id="artist-inner">
+      <p class="ap-loading">Loading…</p>
+    </div>
+  </aside>
+
+  <!-- ── Album panel ────────────────────────────────────── -->
+  <div class="ap-overlay" id="ap-overlay" hidden></div>
+  <aside class="album-panel" id="album-panel" hidden aria-label="Album details">
+    <div class="ap-inner" id="ap-inner">
+      <p class="ap-loading">Loading…</p>
+    </div>
+  </aside>
+  <audio id="preview-audio"></audio>
+
+  <script>
+    // ── Utilities ──────────────────────────────────────────
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+    );
+
+    function isoWeekKey(d = new Date()) {
+      const u = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      u.setUTCDate(u.getUTCDate() + 4 - (u.getUTCDay() || 7));
+      const y = new Date(Date.UTC(u.getUTCFullYear(), 0, 1));
+      const w = Math.ceil(((u - y) / 86400000 + 1) / 7);
+      return `${u.getUTCFullYear()}-W${String(w).padStart(2, '0')}`;
+    }
+
+    function weekDisplay(key) {
+      const [y, w] = key.split('-W');
+      return `Week ${+w} · ${y}`;
+    }
+
+    let _toastTimer;
+    function showToast(msg, type = 'ok', onClick = null) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `toast toast--${type} toast--visible${onClick ? ' toast--clickable' : ''}`;
+      el.onclick = onClick || null;
+      clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => el.classList.remove('toast--visible'), 3500);
+    }
+
+    // ── Theme ──────────────────────────────────────────────
+    const htmlEl = document.documentElement;
+    if (localStorage.getItem('theme') === 'light') htmlEl.classList.replace('dark', 'light');
+    document.getElementById('theme-toggle').addEventListener('click', () => {
+      const light = htmlEl.classList.contains('light');
+      htmlEl.classList.replace(light ? 'light' : 'dark', light ? 'dark' : 'light');
+      localStorage.setItem('theme', light ? 'dark' : 'light');
+    });
+
+    // ── Week labels ────────────────────────────────────────
+    const WEEK = isoWeekKey();
+    document.getElementById('week-label').textContent = weekDisplay(WEEK);
+
+    // ── Auth button glow (nudge logged-out users to sign in) ─
+    function glowAuthButtons() {
+      ['btn-login', 'btn-register'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.classList.remove('btn--glow');
+        void btn.offsetWidth; // force reflow so animation restarts
+        btn.classList.add('btn--glow');
+        btn.addEventListener('animationend', () => btn.classList.remove('btn--glow'), { once: true });
+      });
+    }
+
+    // ── Modals ─────────────────────────────────────────────
+    function openModal(id) {
+      document.getElementById(id).hidden = false;
+      document.getElementById(id).querySelector('input')?.focus();
+    }
+    function closeModal(id) {
+      document.getElementById(id).hidden = true;
+    }
+
+    document.querySelectorAll('[data-close]').forEach(btn =>
+      btn.addEventListener('click', () => closeModal(btn.dataset.close))
+    );
+    document.querySelectorAll('.modal-overlay').forEach(overlay =>
+      overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay.id); })
+    );
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        const albumPanel  = document.getElementById('album-panel');
+        const artistPanel = document.getElementById('artist-panel');
+        const searchPanel = document.getElementById('search-panel');
+        if (!albumPanel.hidden)  { closeAlbumPanel();  return; }
+        if (!artistPanel.hidden) { closeArtistPanel(); return; }
+        if (!searchPanel.hidden) { closeSearchPanel(); return; }
+        document.querySelectorAll('.modal-overlay:not([hidden])').forEach(o => closeModal(o.id));
+      }
+    });
+
+    document.getElementById('btn-login').addEventListener('click',    () => openModal('modal-login'));
+    document.getElementById('btn-register').addEventListener('click', () => openModal('modal-register'));
+    document.getElementById('sw-to-reg').addEventListener('click',    () => { closeModal('modal-login');    openModal('modal-register'); });
+    document.getElementById('sw-to-login').addEventListener('click',  () => { closeModal('modal-register'); openModal('modal-login'); });
+
+    // ── Auth state ─────────────────────────────────────────
+    let me          = null;
+    let myPickId    = null;
+    let pendingPick = null;
+
+    // ── Spotify player ─────────────────────────────────────
+    let spotifyConnected  = false;
+    let _playerPollTimer  = null;
+
+    async function checkSpotifyStatus() {
+      if (!me) return;
+      try {
+        const r = await fetch('/player/status');
+        const d = await r.json();
+        spotifyConnected = d.connected;
+        updateSpotifyBtn();
+        if (spotifyConnected) startPlayerPoll();
+      } catch {}
+    }
+
+    const SPOTIFY_LOGO_SVG = `<svg class="spotify-logo" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>`;
+
+    function updateSpotifyBtn() {
+      const btn = document.getElementById('btn-spotify');
+      if (!btn) return;
+      if (spotifyConnected) {
+        btn.innerHTML = `Connected ${SPOTIFY_LOGO_SVG}`;
+        btn.classList.add('btn-spotify--on');
+        btn.title = 'Spotify connected — click to disconnect';
+      } else {
+        btn.innerHTML = `Connect ${SPOTIFY_LOGO_SVG}`;
+        btn.classList.remove('btn-spotify--on');
+        btn.title = 'Connect your Spotify account';
+      }
+    }
+
+    function startPlayerPoll() {
+      if (_playerPollTimer) return;
+      syncPlayerState();
+      _playerPollTimer = setInterval(syncPlayerState, 3000);
+    }
+
+    function stopPlayerPoll() {
+      clearInterval(_playerPollTimer);
+      _playerPollTimer = null;
+    }
+
+    async function syncPlayerState() {
+      if (!me || !spotifyConnected) return;
+      try {
+        const r = await fetch('/player/state');
+        const d = await r.json();
+        renderMiniPlayer(d);
+      } catch {}
+    }
+
+    // Play helper — automatically retries with a device_id if Spotify
+    // returns 404 (open but idle, no "active" device).
+    async function spotifyPlay(body = {}) {
+      const doPlay = async (deviceId) => {
+        const url = deviceId ? `/player/play?device_id=${encodeURIComponent(deviceId)}` : '/player/play';
+        return fetch(url, {
+          method:  'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(body),
+        });
+      };
+
+      let resp = await doPlay(null);
+      let data = await resp.json();
+
+      // 404 = no active device — fetch available devices and retry with the first one
+      if (!data.ok && (resp.status === 404 || data.status === 404)) {
+        const devResp = await fetch('/player/devices');
+        const devData = await devResp.json();
+        const device  = devData.devices?.[0];
+        if (device) {
+          resp = await doPlay(device.id);
+          data = await resp.json();
+        }
+      }
+
+      if (!data.ok) {
+        showToast('Open Spotify on any device first', 'err');
+      }
+      return data;
+    }
+
+    let _mpAlbumId       = null; // Spotify album ID currently in the mini player
+    let _mpTrackId       = null; // Spotify track ID currently playing
+    let _mpTracks        = null; // cached track list for that album
+    let _mpRatings       = {};   // { [trackSpotifyId]: rating } for current album
+    let _mpTracklistOpen = false;
+
+    function renderMiniPlayer(d) {
+      const el = document.getElementById('mini-player');
+      if (!d?.connected || !d.item) {
+        el.hidden = true;
+        closeMpTracklist();
+        return;
+      }
+      el.hidden = false;
+      const art = d.item.album?.images?.find(i => i.height <= 64) || d.item.album?.images?.[0];
+      document.getElementById('mp-art').src               = art?.url || '';
+      document.getElementById('mp-track').textContent     = d.item.name;
+      document.getElementById('mp-playpause').textContent = d.is_playing ? '⏸' : '▶';
+
+      const albumChanged = d.item.album?.id !== _mpAlbumId;
+      const trackChanged = d.item.id !== _mpTrackId;
+
+      if (albumChanged) {
+        _mpAlbumId = d.item.album?.id;
+        _mpTracks  = null;
+        _mpRatings = {};
+        if (me) fetchMpRatings(); // load ratings for new album
+        if (_mpTracklistOpen) renderMpTracklist(d.item.uri);
+      }
+
+      if (trackChanged) {
+        _mpTrackId = d.item.id;
+        setMpStars(_mpRatings[_mpTrackId] || 0);
+        if (_mpTracklistOpen) highlightMpTrack(d.item.uri);
+      }
+
+      // Show stars only when logged in
+      document.getElementById('mp-stars').style.display = me ? 'flex' : 'none';
+    }
+
+    async function fetchMpRatings() {
+      if (!_mpAlbumId || !me) return;
+      try {
+        const r = await fetch(`/albums/${encodeURIComponent(_mpAlbumId)}/track-ratings`);
+        const d = await r.json();
+        _mpRatings = {};
+        (d.ratings || []).forEach(({ trackId, rating }) => { _mpRatings[trackId] = rating; });
+        setMpStars(_mpRatings[_mpTrackId] || 0);
+      } catch {}
+    }
+
+    function setMpStars(value) {
+      document.querySelectorAll('#mp-stars .mp-star').forEach(s => {
+        s.classList.toggle('mp-star--on', parseInt(s.dataset.value) <= value);
+      });
+    }
+
+    // Wire up mini player star hover + click
+    const mpStarsEl = document.getElementById('mp-stars');
+    mpStarsEl.addEventListener('mouseover', e => {
+      const s = e.target.closest('.mp-star');
+      if (s) setMpStars(parseInt(s.dataset.value));
+    });
+    mpStarsEl.addEventListener('mouseleave', () => {
+      setMpStars(_mpRatings[_mpTrackId] || 0);
+    });
+    mpStarsEl.addEventListener('click', async e => {
+      const s = e.target.closest('.mp-star');
+      if (!s || !me || !_mpTrackId || !_mpAlbumId) return;
+      const rating = parseInt(s.dataset.value);
+      _mpRatings[_mpTrackId] = rating;
+      setMpStars(rating);
+      try {
+        await fetch(`/albums/${encodeURIComponent(_mpAlbumId)}/track-ratings`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ trackId: _mpTrackId, rating }),
+        });
+      } catch {}
+    });
+
+    async function renderMpTracklist(activeTrackUri) {
+      const panel = document.getElementById('mp-tracklist');
+      panel.hidden = false;
+      _mpTracklistOpen = true;
+
+      if (!_mpTracks) {
+        panel.innerHTML = '<p class="mp-tl-loading">Loading…</p>';
+        try {
+          const r = await fetch(`/albums/${encodeURIComponent(_mpAlbumId)}`);
+          const d = await r.json();
+          _mpTracks = d.tracks || [];
+        } catch {
+          panel.innerHTML = '<p class="mp-tl-loading">Could not load tracks.</p>';
+          return;
+        }
+      }
+
+      panel.innerHTML = _mpTracks.map(t => `
+        <button class="mp-tl-row" data-track-uri="spotify:track:${esc(t.id)}">
+          <span class="mp-tl-num">${t.trackNumber}</span>
+          <span class="mp-tl-name">${esc(t.name)}</span>
+          <span class="mp-tl-dur">${fmtDuration(t.durationMs)}</span>
+        </button>
+      `).join('');
+
+      panel.querySelectorAll('.mp-tl-row').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          await spotifyPlay({
+            context_uri: `spotify:album:${_mpAlbumId}`,
+            offset:      { uri: btn.dataset.trackUri },
+          });
+          setTimeout(syncPlayerState, 600);
+        });
+      });
+
+      highlightMpTrack(activeTrackUri);
+    }
+
+    function highlightMpTrack(activeUri) {
+      document.querySelectorAll('.mp-tl-row').forEach(btn => {
+        btn.classList.toggle('mp-tl-row--active', btn.dataset.trackUri === activeUri);
+      });
+    }
+
+    function closeMpTracklist() {
+      document.getElementById('mp-tracklist').hidden = true;
+      _mpTracklistOpen = false;
+    }
+
+    // ── Mini player artwork interactions ───────────────────
+    // Hover → show tracklist   |   Click → open album panel
+    let _mpHoverTimer = null;
+    const mpArtEl      = document.getElementById('mp-art');
+    const mpTracklistEl = document.getElementById('mp-tracklist');
+
+    async function openMpTracklist() {
+      const r = await fetch('/player/state').catch(() => null);
+      const d = r ? await r.json() : null;
+      renderMpTracklist(d?.item?.uri || null);
+    }
+
+    mpArtEl.addEventListener('mouseenter', () => {
+      clearTimeout(_mpHoverTimer);
+      if (!_mpTracklistOpen) openMpTracklist();
+    });
+
+    mpArtEl.addEventListener('mouseleave', () => {
+      _mpHoverTimer = setTimeout(closeMpTracklist, 200);
+    });
+
+    mpTracklistEl.addEventListener('mouseenter', () => {
+      clearTimeout(_mpHoverTimer);
+    });
+
+    mpTracklistEl.addEventListener('mouseleave', () => {
+      _mpHoverTimer = setTimeout(closeMpTracklist, 200);
+    });
+
+    // Click artwork → open the album side panel
+    mpArtEl.addEventListener('click', () => {
+      if (_mpAlbumId) openAlbumPanel(_mpAlbumId);
+    });
+
+    document.getElementById('btn-spotify').addEventListener('click', async () => {
+      if (!me) { openModal('modal-login'); return; }
+      if (spotifyConnected) {
+        await fetch('/player/disconnect', { method: 'DELETE' });
+        spotifyConnected = false;
+        stopPlayerPoll();
+        document.getElementById('mini-player').hidden = true;
+        updateSpotifyBtn();
+        showToast('Spotify disconnected.');
+      } else {
+        window.location.href = '/player/connect';
+      }
+    });
+
+    document.getElementById('mp-playpause').addEventListener('click', async () => {
+      const playing = document.getElementById('mp-playpause').textContent === '⏸';
+      if (playing) {
+        await fetch('/player/pause', { method: 'PUT' });
+      } else {
+        await spotifyPlay();
+      }
+      setTimeout(syncPlayerState, 300);
+    });
+    document.getElementById('mp-next').addEventListener('click', async () => {
+      await fetch('/player/next', { method: 'POST' });
+      setTimeout(syncPlayerState, 500);
+    });
+
+    // Handle ?spotify_connected and ?spotify_error query params
+    (function handleSpotifyQueryParam() {
+      const p = new URLSearchParams(location.search);
+      if (p.has('spotify_connected')) {
+        showToast('Spotify connected!');
+        history.replaceState({}, '', '/');
+      } else if (p.has('spotify_error')) {
+        showToast('Spotify connection failed.', 'err');
+        history.replaceState({}, '', '/');
+      }
+    })();
+
+    function applyAuthUI(user) {
+      me = user;
+      document.getElementById('auth-loggedout').hidden  = !!user;
+      document.getElementById('auth-loggedin').hidden   = !user;
+      document.getElementById('my-pick-section').hidden = !user;
+      if (user) {
+        document.getElementById('user-chip').textContent = user.email;
+        loadMyPick();
+        checkSpotifyStatus();
+      } else {
+        spotifyConnected = false;
+        stopPlayerPoll();
+        document.getElementById('mini-player').hidden = true;
+        updateSpotifyBtn();
+      }
+    }
+
+    async function refreshAuth() {
+      try {
+        const r = await fetch('/auth/me');
+        const d = await r.json();
+        applyAuthUI(d.user);
+      } catch { applyAuthUI(null); }
+    }
+
+    // ── Login ──────────────────────────────────────────────
+    document.getElementById('form-login').addEventListener('submit', async e => {
+      e.preventDefault();
+      const status = document.getElementById('login-status');
+      const btn    = e.target.querySelector('[type=submit]');
+      const email  = document.getElementById('l-email').value;
+      const pass   = document.getElementById('l-pass').value;
+      btn.disabled = true; btn.textContent = 'Logging in…';
+      status.textContent = ''; status.className = 'form-status';
+
+      try {
+        const r = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: pass }),
+        });
+        const d = await r.json();
+        if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
+        closeModal('modal-login');
+        applyAuthUI({ email: d.email });
+        showToast('Welcome back!');
+        if (pendingPick) { const p = pendingPick; pendingPick = null; await doRecommend(p); }
+      } catch {
+        status.textContent = 'Something went wrong.';
+        status.className = 'form-status err';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Log in';
+      }
+    });
+
+    // ── Register ───────────────────────────────────────────
+    document.getElementById('form-register').addEventListener('submit', async e => {
+      e.preventDefault();
+      const status = document.getElementById('reg-status');
+      const btn    = e.target.querySelector('[type=submit]');
+      const email  = document.getElementById('r-email').value;
+      const pass   = document.getElementById('r-pass').value;
+      btn.disabled = true; btn.textContent = 'Creating…';
+      status.textContent = ''; status.className = 'form-status';
+
+      try {
+        const r = await fetch('/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password: pass }),
+        });
+        const d = await r.json();
+        if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
+        status.textContent = 'Check your email to verify your account.';
+        status.className = 'form-status ok';
+        e.target.reset();
+      } catch {
+        status.textContent = 'Something went wrong.';
+        status.className = 'form-status err';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Create account';
+      }
+    });
+
+    // ── Logout ─────────────────────────────────────────────
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+      await fetch('/auth/logout', { method: 'POST' });
+      applyAuthUI(null);
+      myPickId = null;
+      showToast('Logged out.');
+    });
+
+    // ── My pick ────────────────────────────────────────────
+    async function loadMyPick() {
+      try {
+        const r = await fetch('/recommendations/me');
+        const d = await r.json();
+        myPickId = d.recommendation?.spotifyId ?? null;
+        renderMyPick(d.recommendation);
+        rerenderPickButtons();
+      } catch {}
+    }
+
+    function renderMyPick(album) {
+      const el = document.getElementById('my-pick-inner');
+      if (!album) {
+        el.innerHTML = `<p class="my-pick-empty">No pick yet — search above to cast your vote.</p>`;
+        return;
+      }
+      const bg = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
+      el.innerHTML = `
+        <div class="my-pick-card">
+          <div class="pick-cover" ${bg}></div>
+          <div class="pick-info">
+            <span class="pick-title">${esc(album.title)}</span>
+            <span class="pick-artist">${esc(album.artist)}</span>
+          </div>
+          <button class="btn btn-ghost btn--sm" id="btn-change">Change</button>
+        </div>
+      `;
+      document.getElementById('btn-change')?.addEventListener('click', () => {
+        document.getElementById('search-input').focus();
+        document.querySelector('.search-section').scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    // ── Leaderboard ────────────────────────────────────────
+    async function loadLeaderboard() {
+      try {
+        const r = await fetch('/recommendations');
+        const d = await r.json();
+        renderLeaderboard(d.albums);
+      } catch {}
+    }
+
+    function renderLeaderboard(albums) {
+      const el = document.getElementById('leaderboard');
+      if (!albums.length) {
+        el.innerHTML = '<p class="empty-state">No picks yet — be the first!</p>';
+        return;
+      }
+      el.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.className = 'lb-grid';
+      albums.forEach((a, i) => {
+        const yearBadge  = a.releaseYear ? `<span class="lb-year">${esc(a.releaseYear)}</span>` : '';
+        const meta       = yearBadge ? `<div class="lb-meta">${yearBadge}</div>` : '';
+        const bg         = a.coverUrl ? `style="background-image:url('${esc(a.coverUrl)}')"` : '';
+        const card       = document.createElement('div');
+        card.className   = 'lb-card';
+        card.innerHTML   = `
+          <button class="lb-card-btn" data-spotify-id="${esc(a.spotifyId)}" aria-label="Open ${esc(a.title)}">
+            <div class="lb-card-cover" ${bg}>
+              <span class="lb-card-rank">${i + 1}</span>
+            </div>
+            <div class="lb-card-body">
+              <p class="lb-card-title">${esc(a.title)}</p>
+              <p class="lb-card-artist">${esc(a.artist)}</p>
+              ${meta}
+            </div>
+          </button>
+          <div class="lb-card-footer">
+            <span class="lb-card-count">${a.count} ${a.count === 1 ? 'pick' : 'picks'}</span>
+          </div>
+        `;
+        card.querySelector('.lb-card-btn').addEventListener('click', () => openAlbumPanel(a.spotifyId, a));
+        grid.appendChild(card);
+      });
+      el.appendChild(grid);
+    }
+
+    // ── Recommend ──────────────────────────────────────────
+    async function doRecommend(album) {
+      if (!me) {
+        pendingPick = album;
+        openModal('modal-login');
+        return;
+      }
+      try {
+        const r = await fetch('/recommendations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(album),
+        });
+        const d = await r.json();
+        if (!r.ok) { showToast(d.error || 'Error saving pick.', 'err'); return; }
+        myPickId = album.spotifyId;
+        renderMyPick(album);
+        rerenderPickButtons();
+        loadLeaderboard();
+        showToast(`Picked "${album.title}"!`);
+        // Update pick button in panel if it's open for this album
+        if (_panelSpotifyId === album.spotifyId) {
+          const panelBtn = document.querySelector('#ap-inner .ap-pick-btn');
+          if (panelBtn) { panelBtn.textContent = 'Your pick ✓'; panelBtn.classList.add('btn-pick--active'); panelBtn.disabled = true; }
+        }
+      } catch {
+        showToast('Error saving pick.', 'err');
+      }
+    }
+
+    // ── Search ─────────────────────────────────────────────
+    let _searchTimer;
+    let _currentResults = [];
+
+    document.getElementById('search-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const q = e.target.value.trim();
+        if (!q) return;
+        clearTimeout(_searchTimer);
+        document.getElementById('search-results').hidden = true;
+        openSearchPanel(q);
+      }
+    });
+
+    document.getElementById('search-input').addEventListener('blur', () => {
+      // Small delay lets clicks on result rows fire before we hide the list
+      setTimeout(() => {
+        document.getElementById('search-results').hidden = true;
+      }, 150);
+    });
+
+    document.getElementById('search-input').addEventListener('focus', () => {
+      const el = document.getElementById('search-results');
+      if (el.innerHTML.trim()) el.hidden = false;
+    });
+
+    document.getElementById('search-input').addEventListener('input', e => {
+      clearTimeout(_searchTimer);
+      const q = e.target.value.trim();
+      if (!q) {
+        document.getElementById('search-results').hidden = true;
+        document.getElementById('search-results').innerHTML = '';
+        _currentResults = [];
+        return;
+      }
+      _searchTimer = setTimeout(() => doSearch(q), 380);
+    });
+
+    async function doSearch(q) {
+      const el = document.getElementById('search-results');
+      el.hidden = false;
+      el.innerHTML = '<p class="search-loading">Searching…</p>';
+      try {
+        const r = await fetch(`/search?q=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        _currentResults = d.albums ?? [];
+        renderSearchResults(_currentResults);
+      } catch {
+        el.innerHTML = '<p class="empty-state">Search failed. Try again.</p>';
+      }
+    }
+
+    function renderSearchResults(albums) {
+      const el = document.getElementById('search-results');
+      if (!albums.length) {
+        el.innerHTML = '<p class="empty-state">No results found.</p>';
+        return;
+      }
+      el.innerHTML = '';
+      albums.forEach(album => {
+        const row = document.createElement('div');
+        row.className = 'sr-row';
+        const isPick = album.spotifyId === myPickId;
+        const bg     = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
+        row.innerHTML = `
+          <button class="sr-main" data-spotify-id="${esc(album.spotifyId)}" aria-label="Open ${esc(album.title)}">
+            <div class="sr-art" ${bg}></div>
+            <div class="sr-info">
+              <span class="sr-title">${esc(album.title)}</span>
+              <span class="sr-artist">${esc(album.artist)}</span>
+              <span class="sr-meta">${album.releaseYear ? esc(album.releaseYear) : ''}</span>
+            </div>
+          </button>
+          <button class="btn-pick ${isPick ? 'btn-pick--active' : ''}"
+                  data-spotify-id="${esc(album.spotifyId)}"
+                  ${isPick ? 'disabled' : ''}>
+            ${isPick ? 'Your pick ✓' : 'Recommend'}
+          </button>
+        `;
+        row.querySelector('.sr-main').addEventListener('click', () => {
+          document.getElementById('search-results').hidden = true;
+          openAlbumPanel(album.spotifyId, album);
+        });
+        row.querySelector('.btn-pick').addEventListener('click', () => doRecommend(album));
+        el.appendChild(row);
+      });
+    }
+
+    function rerenderPickButtons() {
+      const hasPick = !!myPickId;
+      document.querySelectorAll('.btn-pick').forEach(btn => {
+        const active = btn.dataset.spotifyId === myPickId;
+        btn.textContent = active ? 'Your pick ✓' : 'Recommend';
+        btn.classList.toggle('btn-pick--active', active);
+        // Disable the picked album's button AND all others once a pick is made
+        btn.disabled = active || hasPick;
+      });
+    }
+
+
+    // ── Album panel ────────────────────────────────────────
+    let _panelSpotifyId = null;   // currently open album
+    let _playingTrackId = null;   // currently playing track id
+    const _audio        = document.getElementById('preview-audio');
+
+    _audio.addEventListener('ended', () => {
+      _playingTrackId = null;
+      document.querySelectorAll('.track-play').forEach(b => b.innerHTML = playIcon());
+    });
+
+    function playIcon()  { return '<svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><polygon points="5,3 19,12 5,21"/></svg>'; }
+    function pauseIcon() { return '<svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>'; }
+
+    function fmtDuration(ms) {
+      const s = Math.round(ms / 1000);
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    function fmtDate(unixSec) {
+      return new Date(unixSec * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function openAlbumPanel(spotifyId, hintAlbum = null) {
+      _panelSpotifyId = spotifyId;
+      const panel   = document.getElementById('album-panel');
+      const overlay = document.getElementById('ap-overlay');
+      const inner   = document.getElementById('ap-inner');
+
+      // Show placeholder immediately from hint data while we fetch
+      if (hintAlbum) {
+        const bg = hintAlbum.coverUrl ? `style="background-image:url('${esc(hintAlbum.coverUrl)}')"` : '';
+        inner.innerHTML = `
+          <div class="ap-hero">
+            <div class="ap-cover" ${bg}></div>
+            <div class="ap-meta">
+              <h2 class="ap-title">${esc(hintAlbum.title)}</h2>
+              <p class="ap-artist">${esc(hintAlbum.artist)}</p>
+            </div>
+          </div>
+          <p class="ap-loading" style="padding:1.5rem 1.25rem">Loading tracks…</p>
+        `;
+      } else {
+        inner.innerHTML = '<p class="ap-loading">Loading…</p>';
+      }
+
+      overlay.hidden = false;
+      panel.hidden   = false;
+      document.body.style.overflow = 'hidden';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => panel.classList.add('ap-open'));
+      });
+
+      // Fetch album detail + comments in parallel
+      Promise.all([
+        fetch(`/albums/${encodeURIComponent(spotifyId)}`).then(r => r.json()),
+        fetch(`/albums/${encodeURIComponent(spotifyId)}/comments`).then(r => r.json()),
+      ]).then(([albumRes, commentsRes]) => {
+        if (_panelSpotifyId !== spotifyId) return; // panel switched
+        renderAlbumPanel(albumRes.album, albumRes.tracks, albumRes.weekPickCount, commentsRes.comments ?? [], albumRes.appleMusicUrl ?? null, albumRes.description ?? null, albumRes.descriptionSource ?? null);
+      }).catch(() => {
+        if (_panelSpotifyId !== spotifyId) return;
+        document.getElementById('ap-inner').innerHTML = '<p class="ap-loading" style="color:var(--error)">Failed to load album.</p>';
+      });
+    }
+
+    function closeAlbumPanel() {
+      const panel       = document.getElementById('album-panel');
+      const overlay     = document.getElementById('ap-overlay');
+      const searchPanel = document.getElementById('search-panel');
+      const artistPanel = document.getElementById('artist-panel');
+      panel.classList.remove('ap-open');
+      _panelSpotifyId = null;
+      _audio.pause();
+      _playingTrackId = null;
+      // Only restore scrolling if no other panels are open
+      if (searchPanel.hidden && artistPanel.hidden) document.body.style.overflow = '';
+      panel.addEventListener('transitionend', () => {
+        panel.hidden   = true;
+        overlay.hidden = true;
+      }, { once: true });
+    }
+
+    document.getElementById('ap-overlay').addEventListener('click', closeAlbumPanel);
+    document.getElementById('sp-overlay').addEventListener('click', () => {
+      const artistPanel = document.getElementById('artist-panel');
+      if (!artistPanel.hidden) { closeArtistPanel(); return; }
+      closeSearchPanel();
+    });
+    document.getElementById('sp-back-btn').addEventListener('click', closeSearchPanel);
+
+    // ── Search panel ───────────────────────────────────────
+    async function openSearchPanel(q) {
+      const panel   = document.getElementById('search-panel');
+      const overlay = document.getElementById('sp-overlay');
+      const heading = document.getElementById('sp-heading');
+      const body    = document.getElementById('sp-body');
+
+      heading.textContent = `Results for "${q}"`;
+      body.innerHTML = '<p class="sp-loading">Searching…</p>';
+
+      overlay.hidden = false;
+      panel.hidden   = false;
+      document.body.style.overflow = 'hidden';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => panel.classList.add('sp-open'));
+      });
+
+      try {
+        const r = await fetch(`/search?q=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        renderSearchPanel(d.artists ?? [], d.albums ?? []);
+      } catch {
+        body.innerHTML = '<p class="sp-loading">Search failed. Try again.</p>';
+      }
+    }
+
+    function closeSearchPanel() {
+      // Also dismiss the artist panel if it was open inside the search flow
+      const artistPanel = document.getElementById('artist-panel');
+      if (!artistPanel.hidden) {
+        artistPanel.classList.remove('ap-open');
+        artistPanel.hidden = true;
+        _artistPanelId = null;
+      }
+      const panel   = document.getElementById('search-panel');
+      const overlay = document.getElementById('sp-overlay');
+      panel.classList.remove('sp-open');
+      document.body.style.overflow = '';
+      panel.addEventListener('transitionend', () => {
+        panel.hidden   = true;
+        overlay.hidden = true;
+      }, { once: true });
+    }
+
+    function makeAlbumListRow(album, onClick) {
+      const bg  = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
+      const row = document.createElement('button');
+      row.className = 'sp-list-row';
+      row.setAttribute('aria-label', `Open ${album.title}`);
+      row.innerHTML = `
+        <div class="sp-list-cover" ${bg}></div>
+        <div class="sp-list-info">
+          <span class="sp-list-title">${esc(album.title)}</span>
+          <span class="sp-list-artist">${esc(album.artist)}</span>
+          ${album.releaseYear ? `<span class="sp-list-year">${esc(album.releaseYear)}</span>` : ''}
+        </div>
+      `;
+      row.addEventListener('click', onClick);
+      return row;
+    }
+
+    function renderSearchPanel(artists, albums) {
+      const body = document.getElementById('sp-body');
+      if (!artists.length && !albums.length) {
+        body.innerHTML = '<p class="sp-loading">No results found.</p>';
+        return;
+      }
+      const container = document.createElement('div');
+
+      // ── Artists section
+      if (artists.length) {
+        const lbl = document.createElement('p');
+        lbl.className = 'sp-section-label';
+        lbl.textContent = 'Artists';
+        container.appendChild(lbl);
+
+        const list = document.createElement('div');
+        list.className = 'sp-list';
+        artists.forEach(artist => {
+          const bg  = artist.imageUrl ? `style="background-image:url('${esc(artist.imageUrl)}')"` : '';
+          const row = document.createElement('button');
+          row.className = 'sp-list-row';
+          row.setAttribute('aria-label', `Open ${artist.name}`);
+          row.innerHTML = `
+            <div class="sp-list-cover sp-list-cover--artist" ${bg}></div>
+            <div class="sp-list-info">
+              <span class="sp-list-title">${esc(artist.name)}</span>
+              <span class="sp-list-artist">Artist</span>
+            </div>
+          `;
+          row.addEventListener('click', () => openArtistPanel(artist.spotifyId, artist));
+          list.appendChild(row);
+        });
+        container.appendChild(list);
+      }
+
+      // ── Albums section
+      if (albums.length) {
+        const lbl = document.createElement('p');
+        lbl.className = 'sp-section-label';
+        lbl.textContent = 'Albums';
+        container.appendChild(lbl);
+
+        const list = document.createElement('div');
+        list.className = 'sp-list';
+        albums.forEach(album => {
+          list.appendChild(makeAlbumListRow(album, () => openAlbumPanel(album.spotifyId, album)));
+        });
+        container.appendChild(list);
+      }
+
+      body.innerHTML = '';
+      body.appendChild(container);
+    }
+
+    // ── Artist panel ────────────────────────────────────────
+    let _artistPanelId = null;
+
+    async function openArtistPanel(spotifyId, hintArtist = null) {
+      _artistPanelId = spotifyId;
+      const panel = document.getElementById('artist-panel');
+      const inner = document.getElementById('artist-inner');
+
+      // Immediate placeholder
+      if (hintArtist) {
+        const bg = hintArtist.imageUrl ? `style="background-image:url('${esc(hintArtist.imageUrl)}')"` : '';
+        inner.innerHTML = `
+          <div class="ap-header">
+            <button class="ap-close-btn" id="artist-back-btn" aria-label="Back">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            </button>
+          </div>
+          <div class="artist-hero">
+            <div class="artist-img" ${bg}></div>
+            <h2 class="artist-name">${esc(hintArtist.name)}</h2>
+          </div>
+          <p class="ap-loading" style="padding:1.5rem 1.25rem">Loading…</p>
+        `;
+      } else {
+        inner.innerHTML = '<p class="ap-loading">Loading…</p>';
+      }
+
+      panel.hidden = false;
+      document.body.style.overflow = 'hidden';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => panel.classList.add('ap-open'));
+      });
+
+      try {
+        const r = await fetch(`/artists/${encodeURIComponent(spotifyId)}`);
+        const d = await r.json();
+        if (_artistPanelId !== spotifyId) return;
+        renderArtistPanel(d.artist, d.albums ?? [], d.bio ?? null);
+      } catch {
+        if (_artistPanelId !== spotifyId) return;
+        inner.innerHTML = '<p class="ap-loading" style="color:var(--error)">Failed to load artist.</p>';
+      }
+    }
+
+    function closeArtistPanel() {
+      const panel       = document.getElementById('artist-panel');
+      const searchPanel = document.getElementById('search-panel');
+      panel.classList.remove('ap-open');
+      _artistPanelId = null;
+      // Keep overflow hidden if search panel is still open
+      if (searchPanel.hidden) document.body.style.overflow = '';
+      panel.addEventListener('transitionend', () => {
+        panel.hidden = true;
+      }, { once: true });
+    }
+
+    function renderArtistPanel(artist, albums, bio) {
+      const inner   = document.getElementById('artist-inner');
+      const bg      = artist.imageUrl ? `style="background-image:url('${esc(artist.imageUrl)}')"` : '';
+      const fmtFollowers = n => n >= 1_000_000 ? `${(n/1_000_000).toFixed(1)}M followers`
+                                : n >= 1_000    ? `${(n/1_000).toFixed(0)}K followers`
+                                : `${n} followers`;
+
+      // Album rows (oldest → newest, already sorted)
+      const albumRows = albums.map(a => {
+        const abg = a.coverUrl ? `style="background-image:url('${esc(a.coverUrl)}')"` : '';
+        return `
+          <button class="sp-list-row artist-album-row" data-spotify-id="${esc(a.spotifyId)}" aria-label="Open ${esc(a.title)}">
+            <div class="sp-list-cover" ${abg}></div>
+            <div class="sp-list-info">
+              <span class="sp-list-title">${esc(a.title)}</span>
+              ${a.releaseYear ? `<span class="sp-list-year">${esc(a.releaseYear)}</span>` : ''}
+            </div>
+          </button>
+        `;
+      }).join('');
+
+      inner.innerHTML = `
+        <div class="ap-header">
+          <button class="ap-close-btn" id="artist-back-btn" aria-label="Back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          </button>
+        </div>
+        <div class="artist-hero">
+          <div class="artist-img" ${bg}></div>
+          <div class="artist-hero-meta">
+            <h2 class="artist-name">${esc(artist.name)}</h2>
+            ${artist.followers ? `<p class="ap-sub">${fmtFollowers(artist.followers)}</p>` : ''}
+          </div>
+        </div>
+        ${bio ? `
+        <div class="ap-tabs">
+          <button class="ap-tab-btn ap-tab-btn--active" data-tab="albums">Albums</button>
+          <button class="ap-tab-btn" data-tab="about">About</button>
+        </div>
+        <div class="ap-tab-panel" id="artist-tab-albums">
+          <div class="sp-list artist-album-list">${albumRows || '<p class="ap-loading">No albums found.</p>'}</div>
+        </div>
+        <div class="ap-tab-panel" id="artist-tab-about" hidden>
+          <p class="ap-description">${esc(bio)}</p>
+        </div>` : `
+        <div class="ap-section">
+          <h3 class="ap-section-title">Albums</h3>
+          <div class="sp-list artist-album-list">${albumRows || '<p class="ap-loading">No albums found.</p>'}</div>
+        </div>`}
+      `;
+
+      // Back button
+      document.getElementById('artist-back-btn').addEventListener('click', closeArtistPanel);
+
+      // Tab switching
+      inner.querySelectorAll('.ap-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          inner.querySelectorAll('.ap-tab-btn').forEach(b => b.classList.toggle('ap-tab-btn--active', b === btn));
+          inner.querySelectorAll('.ap-tab-panel').forEach(p => { p.hidden = p.id !== `artist-tab-${btn.dataset.tab}`; });
+        });
+      });
+
+      // Album row clicks → open album panel
+      inner.querySelectorAll('.artist-album-row').forEach((btn, i) => {
+        btn.addEventListener('click', () => openAlbumPanel(albums[i].spotifyId, albums[i]));
+      });
+    }
+
+    function renderAlbumPanel(album, tracks, weekPickCount, comments, appleMusicUrl = null, description = null, descriptionSource = null) {
+      const inner  = document.getElementById('ap-inner');
+      const isPick = album.spotifyId === myPickId;
+
+      const artistLinks = album.artists && album.artists.length
+        ? album.artists.map(a => `<button class="ap-artist-link" data-artist-id="${esc(a.id)}" data-artist-name="${esc(a.name)}">${esc(a.name)}</button>`).join(', ')
+        : esc(album.artist);
+
+      // Track rows with per-track star ratings
+      const trackRows = tracks.map(t => `
+        <div class="track-row">
+          <button class="track-play-btn" data-track-id="${esc(t.id)}" aria-label="Play ${esc(t.name)}">▶</button>
+          <span class="track-num">${t.trackNumber}</span>
+          <div class="track-info">
+            <span class="track-name">${esc(t.name)}</span>
+            ${t.artist !== album.artist ? `<span class="track-feat">${esc(t.artist)}</span>` : ''}
+          </div>
+          <div class="track-stars" data-track-id="${esc(t.id)}">
+            ${[1,2,3,4,5].map(i => `<button class="t-star" data-value="${i}">★</button>`).join('')}
+          </div>
+          <span class="track-duration">${fmtDuration(t.durationMs)}</span>
+        </div>
+      `).join('');
+
+      const commentHtml = renderCommentsHtml(comments);
+
+      inner.innerHTML = `
+        <div class="ap-header">
+          <button class="ap-close-btn" id="ap-close-btn" aria-label="Back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          </button>
+          <div class="ap-header-info">
+            ${album.coverUrl ? `<img class="ap-cover-sm" src="${esc(album.coverUrl)}" alt="">` : ''}
+            <div class="ap-header-text">
+              <h2 class="ap-album-title">${esc(album.title)}${album.releaseYear ? `<span class="ap-header-year"> · ${esc(album.releaseYear)}</span>` : ''}</h2>
+              <p class="ap-header-artist">${artistLinks}</p>
+            </div>
+            <div class="ap-header-score" id="ap-header-score" hidden>
+              <span class="ap-score-val" id="ap-score-val"></span>
+              <span class="ap-score-label" id="ap-score-label">/ 5</span>
+            </div>
+          </div>
+        </div>
+        <div class="ap-action-bar">
+          <div class="ap-action-right" style="margin-left:auto">
+            ${weekPickCount ? `<span class="ap-pick-count">${weekPickCount} ${weekPickCount === 1 ? 'pick' : 'picks'}</span>` : ''}
+            <button class="btn-pick ap-pick-btn ${isPick ? 'btn-pick--active' : ''}"
+                    data-spotify-id="${esc(album.spotifyId)}"
+                    ${isPick ? 'disabled' : ''}>
+              ${isPick ? 'Your pick ✓' : 'Recommend'}
+            </button>
+            <a class="ap-spotify-link" href="https://open.spotify.com/album/${esc(album.spotifyId)}" target="_blank" rel="noopener" title="Open in Spotify">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 0C5.372 0 0 5.373 0 12s5.372 12 12 12 12-5.373 12-12S18.628 0 12 0zm5.52 17.293a.75.75 0 0 1-1.032.25c-2.822-1.724-6.376-2.114-10.56-1.16a.75.75 0 1 1-.334-1.461c4.578-1.046 8.504-.595 11.677 1.34a.75.75 0 0 1 .25 1.031zm1.472-3.28a.938.938 0 0 1-1.29.309c-3.23-1.984-8.148-2.56-11.97-1.4a.937.937 0 1 1-.545-1.794c4.367-1.326 9.79-.683 13.497 1.595a.938.938 0 0 1 .308 1.29zm.126-3.415C15.457 8.484 9.4 8.283 5.923 9.35a1.124 1.124 0 1 1-.652-2.151C9.95 5.975 16.6 6.21 20.454 8.596a1.125 1.125 0 0 1-1.336 1.002z"/></svg>
+            </a>
+            ${appleMusicUrl ? `<a class="ap-apple-link" href="${esc(appleMusicUrl)}" target="_blank" rel="noopener" title="Open in Apple Music">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M23.994 6.124a9.23 9.23 0 0 0-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 0 0-1.877-.726 10.496 10.496 0 0 0-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026C4.786.07 4.043.15 3.34.428 2.004.958 1.04 1.88.475 3.208A9.38 9.38 0 0 0 .09 5.08a10.3 10.3 0 0 0-.016.624V18.29a9.25 9.25 0 0 0 .26 2.19c.316 1.31 1.06 2.31 2.18 3.043a5.022 5.022 0 0 0 1.876.725 10.496 10.496 0 0 0 1.564.15c.04.003.083.01.124.013h12.024c.152-.01.303-.017.454-.026.754-.064 1.498-.144 2.2-.422 1.336-.53 2.3-1.452 2.865-2.78.245-.567.376-1.158.435-1.77.033-.362.046-.724.046-1.086V6.207c-.003-.029-.003-.083-.008-.083zm-6.678 7.799a.9.9 0 0 1-.508.814l-3.236 1.619a.915.915 0 0 1-1.321-.814V9.63a.914.914 0 0 1 .508-.814l3.236-1.618a.914.914 0 0 1 1.321.814z"/></svg>
+            </a>` : ''}
+          </div>
+        </div>
+
+        <nav class="ap-tabs">
+          <button class="ap-tab-btn ap-tab-btn--active" data-tab="tracks">Tracklist</button>
+          ${description ? `<button class="ap-tab-btn" data-tab="about">About</button>` : ''}
+          <button class="ap-tab-btn" data-tab="preview">Preview</button>
+        </nav>
+
+        <div class="ap-tab-panel" id="ap-tab-tracks">
+          <div class="ap-track-list">${trackRows}</div>
+        </div>
+
+        ${description ? `
+        <div class="ap-tab-panel" id="ap-tab-about" hidden>
+          <div class="ap-section">
+            <h3 class="ap-section-title">${descriptionSource === 'album' ? 'About this album' : 'About the artist'}</h3>
+            <p class="ap-description">${esc(description)}</p>
+          </div>
+        </div>` : ''}
+
+        <div class="ap-tab-panel" id="ap-tab-preview" hidden>
+          <div class="ap-spotify-embed">
+            <iframe
+              src="https://open.spotify.com/embed/album/${esc(album.spotifyId)}?utm_source=generator&theme=0"
+              width="100%" height="${80 + tracks.length * 56}" frameborder="0"
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              loading="lazy">
+            </iframe>
+          </div>
+        </div>
+
+        <div class="ap-section" id="ap-comments-section">
+          <h3 class="ap-section-title">Comments</h3>
+          <div id="ap-comments-list">${commentHtml}</div>
+          ${me
+            ? `<form class="ap-comment-form" id="ap-comment-form">
+                 <textarea class="ap-comment-input" id="ap-comment-input" placeholder="Add a comment…" maxlength="1000" rows="3"></textarea>
+                 <button type="submit" class="btn btn-solid ap-comment-submit">Post</button>
+                 <p class="form-status" id="ap-comment-status" aria-live="polite"></p>
+               </form>`
+            : `<p class="ap-login-prompt">
+                 <button class="link-btn" id="ap-login-prompt-btn">Log in</button> to leave a comment.
+               </p>`
+          }
+        </div>
+      `;
+
+      // Close button
+      document.getElementById('ap-close-btn').addEventListener('click', closeAlbumPanel);
+
+      // Artist name links
+      inner.querySelectorAll('.ap-artist-link').forEach(btn => {
+        btn.addEventListener('click', () => {
+          closeAlbumPanel();
+          openArtistPanel(btn.dataset.artistId, { name: btn.dataset.artistName });
+        });
+      });
+
+      // Tab switching
+      inner.querySelectorAll('.ap-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          inner.querySelectorAll('.ap-tab-btn').forEach(b => b.classList.toggle('ap-tab-btn--active', b === btn));
+          inner.querySelectorAll('.ap-tab-panel').forEach(p => { p.hidden = p.id !== `ap-tab-${btn.dataset.tab}`; });
+        });
+      });
+
+      // ── Track ratings ─────────────────────────────────────
+      const trackMap = {}; // trackId → user's rating
+
+      function setTrackStars(trackId, value) {
+        const container = inner.querySelector(`.track-stars[data-track-id="${trackId}"]`);
+        if (!container) return;
+        container.querySelectorAll('.t-star').forEach(s => {
+          s.classList.toggle('t-star--active', parseInt(s.dataset.value) <= value);
+        });
+      }
+
+      function updateHeaderScore(average, count) {
+        const scoreEl = document.getElementById('ap-header-score');
+        const valEl   = document.getElementById('ap-score-val');
+        const lblEl   = document.getElementById('ap-score-label');
+        if (!scoreEl) return;
+        if (average != null) {
+          valEl.textContent = parseFloat(average).toFixed(1);
+          if (lblEl) lblEl.textContent = `/ 5 · ${count} rating${count !== 1 ? 's' : ''}`;
+          scoreEl.hidden = false;
+        } else {
+          scoreEl.hidden = true;
+        }
+      }
+
+      // Fetch community average rating (visible to all users, including logged out)
+      fetch(`/albums/${encodeURIComponent(album.spotifyId)}/rating`)
+        .then(r => r.json())
+        .then(d => updateHeaderScore(d.average, d.count))
+        .catch(() => {});
+
+      // Fetch saved track ratings if logged in
+      if (me) {
+        fetch(`/albums/${encodeURIComponent(album.spotifyId)}/track-ratings`)
+          .then(r => r.json())
+          .then(d => {
+            (d.ratings || []).forEach(({ trackId, rating }) => {
+              trackMap[trackId] = rating;
+              setTrackStars(trackId, rating);
+            });
+          })
+          .catch(() => {});
+      }
+
+      // Wire up star interactions per track
+      inner.querySelectorAll('.track-stars').forEach(container => {
+        const trackId = container.dataset.trackId;
+
+        // Hover always works — preview stars on hover, clear on leave
+        container.addEventListener('mouseover', e => {
+          const s = e.target.closest('.t-star');
+          if (s) setTrackStars(trackId, parseInt(s.dataset.value));
+        });
+        container.addEventListener('mouseleave', () => {
+          setTrackStars(trackId, trackMap[trackId] || 0);
+        });
+
+        if (!me) {
+          // Logged-out: clicking shows a clickable toast nudge
+          container.addEventListener('click', () =>
+            showToast('Sign in to rate', 'info', () => openModal('modal-login'))
+          );
+          return;
+        }
+        container.addEventListener('click', async e => {
+          const s = e.target.closest('.t-star');
+          if (!s) return;
+          const rating = parseInt(s.dataset.value);
+          trackMap[trackId] = rating;
+          setTrackStars(trackId, rating);
+          try {
+            const res  = await fetch(`/albums/${encodeURIComponent(album.spotifyId)}/track-ratings`, {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify({ trackId, rating }),
+            });
+            const data = await res.json();
+            if (data.average != null) updateHeaderScore(data.average, data.count);
+          } catch {}
+        });
+      });
+
+      // ── Per-track play buttons ──────────────────────────────
+      let _popover = null;
+
+      function closePopover() {
+        if (_popover) { _popover.remove(); _popover = null; }
+      }
+
+      function openSpotify(trackId, mode) {
+        if (mode === 'app') {
+          window.location.href = `spotify:track:${trackId}`;
+        } else {
+          window.open(`https://open.spotify.com/track/${trackId}`, '_blank');
+        }
+      }
+
+      function showPlayPopover(btn, trackId) {
+        closePopover();
+        const rect = btn.getBoundingClientRect();
+        const pop  = document.createElement('div');
+        pop.className = 'play-popover';
+        pop.innerHTML = `
+          <button class="play-popover-btn" data-mode="app">Open in Spotify app</button>
+          <button class="play-popover-btn" data-mode="browser">Open in browser</button>
+        `;
+        // Position below the button
+        pop.style.top  = `${rect.bottom + 6}px`;
+        pop.style.left = `${rect.left}px`;
+        document.body.appendChild(pop);
+        _popover = pop;
+
+        pop.querySelectorAll('.play-popover-btn').forEach(b => {
+          b.addEventListener('click', () => {
+            const mode = b.dataset.mode;
+            sessionStorage.setItem('spotifyPlayMode', mode);
+            openSpotify(trackId, mode);
+            closePopover();
+          });
+        });
+
+        // Close on outside click
+        setTimeout(() => document.addEventListener('click', closePopover, { once: true }), 0);
+      }
+
+      inner.querySelectorAll('.track-play-btn').forEach(btn => {
+        btn.addEventListener('click', async e => {
+          e.stopPropagation();
+          const trackId = btn.dataset.trackId;
+
+          // If Spotify is connected via OAuth, control playback directly.
+          // Use context_uri (album) + offset (track) so Next/Prev navigate the full album.
+          if (spotifyConnected) {
+            await spotifyPlay({
+              context_uri: `spotify:album:${album.spotifyId}`,
+              offset:      { uri: `spotify:track:${trackId}` },
+            });
+            setTimeout(syncPlayerState, 600);
+            return;
+          }
+
+          // Otherwise fall back to opening Spotify externally
+          const savedMode = sessionStorage.getItem('spotifyPlayMode');
+          if (savedMode) {
+            openSpotify(trackId, savedMode);
+          } else {
+            showPlayPopover(btn, trackId);
+          }
+        });
+      });
+
+      // Pick button
+      inner.querySelector('.ap-pick-btn')?.addEventListener('click', () => doRecommend(album));
+
+      // Login prompt
+      inner.querySelector('#ap-login-prompt-btn')?.addEventListener('click', () => {
+        closeAlbumPanel();
+        openModal('modal-login');
+      });
+
+      // Comment form
+      const form = inner.querySelector('#ap-comment-form');
+      if (form) {
+        form.addEventListener('submit', async e => {
+          e.preventDefault();
+          const input  = document.getElementById('ap-comment-input');
+          const status = document.getElementById('ap-comment-status');
+          const submit = form.querySelector('[type=submit]');
+          const body   = input.value.trim();
+          if (!body) return;
+
+          submit.disabled = true; submit.textContent = 'Posting…';
+          status.textContent = ''; status.className = 'form-status';
+
+          try {
+            const r = await fetch(`/albums/${encodeURIComponent(album.spotifyId)}/comments`, {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify({
+                body, title: album.title, artist: album.artist,
+                coverUrl: album.coverUrl, releaseYear: album.releaseYear,
+                spotifyId: album.spotifyId,
+              }),
+            });
+            const d = await r.json();
+            if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
+            const list = document.getElementById('ap-comments-list');
+            const div  = document.createElement('div');
+            div.innerHTML = commentItemHtml(d.comment);
+            list.prepend(div.firstElementChild);
+            input.value = '';
+          } catch {
+            status.textContent = 'Failed to post comment.';
+            status.className   = 'form-status err';
+          } finally {
+            submit.disabled = false; submit.textContent = 'Post';
+          }
+        });
+      }
+    }
+
+    function commentItemHtml(c) {
+      const name = c.userEmail ? c.userEmail.split('@')[0] : 'user'; // TODO: replace with username
+      return `
+        <div class="comment-item">
+          <span class="comment-author">${esc(name)}</span>
+          <span class="comment-date">${fmtDate(c.createdAt)}</span>
+          <p class="comment-body">${esc(c.body)}</p>
+        </div>
+      `;
+    }
+
+    function renderCommentsHtml(comments) {
+      if (!comments.length) return '<p class="ap-no-comments">No comments yet.</p>';
+      return comments.map(commentItemHtml).join('');
+    }
+
+    function playTrack(previewUrl, trackId) {
+      if (_playingTrackId === trackId) {
+        // Toggle pause/resume on same track
+        if (_audio.paused) {
+          _audio.play();
+          updatePlayButtons(trackId, true);
+        } else {
+          _audio.pause();
+          updatePlayButtons(trackId, false);
+        }
+        return;
+      }
+      // Switch to new track
+      _audio.pause();
+      _audio.src     = previewUrl;
+      _playingTrackId = trackId;
+      _audio.play().catch(() => {}); // autoplay may be blocked silently
+      updatePlayButtons(trackId, true);
+    }
+
+    function updatePlayButtons(activeTrackId, isPlaying) {
+      document.querySelectorAll('.track-play').forEach(btn => {
+        const isThis = btn.dataset.trackId === activeTrackId;
+        btn.innerHTML = (isThis && isPlaying) ? pauseIcon() : playIcon();
+      });
+    }
+
+    // ── Init ───────────────────────────────────────────────
+    (async () => {
+      await refreshAuth();
+      await loadLeaderboard();
+      loadCarousel();
+      if (new URLSearchParams(location.search).get('verified') === '1') {
+        showToast('Email verified! You can now log in.');
+        history.replaceState(null, '', '/');
+      }
+    })();
+
+    // ── Landing carousel ───────────────────────────────────
+    async function loadCarousel() {
+      try {
+        const res  = await fetch('/search/featured');
+        if (!res.ok) return;
+        const { albums } = await res.json();
+        if (!albums?.length) return;
+
+        const track = document.getElementById('carousel-track');
+        const wrap  = document.getElementById('carousel-wrap');
+
+        // Duplicate for seamless loop
+        const items = [...albums, ...albums];
+        track.innerHTML = items.map(a => `
+          <div class="carousel-item">
+            <img src="${esc(a.coverUrl)}" alt="${esc(a.title)}" loading="lazy" draggable="false">
+          </div>
+        `).join('');
+
+        wrap.hidden = false;
+      } catch {}
+    }
+
+    // ── Magazine scroll effect ──────────────────────────────
+    const searchSection = document.querySelector('.search-section');
+    const fadeInSections = document.querySelectorAll('.picks-page');
+
+    window.addEventListener('scroll', () => {
+      const scrollY  = window.scrollY;
+      const vh       = window.innerHeight;
+
+      // Fade out hero
+      searchSection.style.opacity = 1 - Math.min(scrollY / (vh * 0.35), 1);
+
+      // Fade in picks only after scrolling at least 45% of the viewport
+      fadeInSections.forEach(s => {
+        if (scrollY > vh * 0.45) {
+          s.classList.add('visible');
+        } else {
+          s.classList.remove('visible');
+        }
+      });
+    }, { passive: true });
+  </script>
+</body>
+</html>

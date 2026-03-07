@@ -1,0 +1,126 @@
+'use strict';
+const express      = require('express');
+const { getDb }    = require('../db');
+const requireAuth  = require('../middleware/requireAuth');
+
+const router = express.Router();
+
+// Returns the ISO week key for a given Date, e.g. "2026-W10"
+function isoWeekKey(date = new Date()) {
+  // Copy date so we don't mutate the original
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  // Set to nearest Thursday: current date + 4 - current day number (Mon=1, Sun=7)
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo    = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+// ── POST /recommend ───────────────────────────────────────
+// Body: { spotifyId, title, artist, coverUrl, releaseYear }
+// One recommendation per logged-in user per ISO week.
+router.post('/', requireAuth, async (req, res) => {
+  const { spotifyId, title, artist, coverUrl, releaseYear } = req.body;
+
+  if (!spotifyId || !title || !artist) {
+    return res.status(400).json({ error: 'spotifyId, title and artist are required.' });
+  }
+
+  const weekKey = isoWeekKey();
+
+  try {
+    const db = await getDb();
+
+    // Upsert the album into our local cache
+    await db.run(
+      `INSERT INTO albums (spotify_id, title, artist, cover_url, release_year)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(spotify_id) DO UPDATE
+         SET title        = excluded.title,
+             artist       = excluded.artist,
+             cover_url    = excluded.cover_url,
+             release_year = excluded.release_year`,
+      spotifyId, title, artist, coverUrl ?? null, releaseYear ?? null
+    );
+
+    const album = await db.get('SELECT id FROM albums WHERE spotify_id = ?', spotifyId);
+
+    // One recommendation per user per week — reject if they already picked
+    const existing = await db.get(
+      'SELECT id FROM recommendations WHERE user_id = ? AND week_key = ?',
+      req.session.userId, weekKey
+    );
+    if (existing) {
+      return res.status(409).json({ error: 'You have already made your pick this week.' });
+    }
+
+    await db.run(
+      'INSERT INTO recommendations (user_id, album_id, week_key) VALUES (?, ?, ?)',
+      req.session.userId, album.id, weekKey
+    );
+
+    res.json({ ok: true, weekKey });
+  } catch (err) {
+    console.error('Recommend error:', err.message);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── GET /recommendations?week=<key> ──────────────────────
+// Returns albums ranked by number of recommendations for a given week.
+// week defaults to the current ISO week.
+router.get('/', async (req, res) => {
+  const weekKey = req.query.week || isoWeekKey();
+
+  try {
+    const db   = await getDb();
+    const rows = await db.all(
+      `SELECT a.spotify_id  AS spotifyId,
+              a.title,
+              a.artist,
+              a.cover_url   AS coverUrl,
+              a.release_year AS releaseYear,
+              COUNT(r.id)   AS count
+       FROM   recommendations r
+       JOIN   albums a ON a.id = r.album_id
+       WHERE  r.week_key = ?
+       GROUP  BY r.album_id
+       ORDER  BY count DESC, a.title ASC
+       LIMIT  50`,
+      weekKey
+    );
+
+    res.json({ weekKey, albums: rows });
+  } catch (err) {
+    console.error('Recommendations fetch error:', err.message);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── GET /recommendations/me ───────────────────────────────
+// Returns the current user's recommendation for the current week (if any).
+router.get('/me', requireAuth, async (req, res) => {
+  const weekKey = isoWeekKey();
+
+  try {
+    const db  = await getDb();
+    const row = await db.get(
+      `SELECT a.spotify_id   AS spotifyId,
+              a.title,
+              a.artist,
+              a.cover_url    AS coverUrl,
+              a.release_year AS releaseYear
+       FROM   recommendations r
+       JOIN   albums a ON a.id = r.album_id
+       WHERE  r.user_id = ? AND r.week_key = ?`,
+      req.session.userId, weekKey
+    );
+
+    res.json({ weekKey, recommendation: row ?? null });
+  } catch (err) {
+    console.error('Recommendations/me error:', err.message);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+module.exports = router;

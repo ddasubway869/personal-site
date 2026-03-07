@@ -1,0 +1,364 @@
+'use strict';
+const express     = require('express');
+const { getDb }   = require('../db');
+const { getAlbum } = require('../lib/spotify');
+const requireAuth = require('../middleware/requireAuth');
+
+const router = express.Router();
+
+// ── TheAudioDB — album description (falls back to artist bio) ────────────
+// Both functions use the free demo key "2"; returns null on timeout / no match.
+
+async function getAlbumDescription(artist, title) {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 4000);
+  try {
+    const url = `https://www.theaudiodb.com/api/v1/json/2/searchalbum.php` +
+                `?s=${encodeURIComponent(artist)}&a=${encodeURIComponent(title)}`;
+    const res  = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.album?.[0]?.strDescriptionEN?.trim() || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+async function getArtistBio(artist) {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 4000);
+  try {
+    const url = `https://www.theaudiodb.com/api/v1/json/2/search.php` +
+                `?s=${encodeURIComponent(artist)}`;
+    const res  = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.artists?.[0]?.strBiographyEN?.trim() || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+// ── Song.link — translates a Spotify album URL → Apple Music URL ──────────
+// Returns null if the request times out (5 s) or song.link has no match.
+async function getAppleMusicUrl(spotifyId) {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 5000);
+  try {
+    const songLinkUrl =
+      `https://api.song.link/v1-alpha.1/links?url=${encodeURIComponent(`https://open.spotify.com/album/${spotifyId}`)}`;
+    const res  = await fetch(songLinkUrl, { signal: controller.signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.linksByPlatform?.appleMusic?.url ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+// Returns ISO week key for current week, e.g. "2026-W10"
+function isoWeekKey(date = new Date()) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo    = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+// ── GET /albums/:spotifyId ────────────────────────────────
+// Returns album metadata + tracks from Spotify, plus this week's pick count.
+router.get('/:spotifyId', async (req, res) => {
+  const { spotifyId } = req.params;
+
+  try {
+    // Phase 1 — Spotify album + DB (artist/title needed before phase 2)
+    const [albumData, db] = await Promise.all([getAlbum(spotifyId), getDb()]);
+    const weekKey = isoWeekKey();
+
+    // Phase 2 — all derived lookups run in parallel
+    const [pickRow, appleMusicUrl, albumDesc, artistBio] = await Promise.all([
+      db.get(
+        `SELECT COUNT(r.id) AS count
+         FROM   recommendations r
+         JOIN   albums a ON a.id = r.album_id
+         WHERE  a.spotify_id = ? AND r.week_key = ?`,
+        spotifyId, weekKey
+      ),
+      getAppleMusicUrl(spotifyId),
+      getAlbumDescription(albumData.artist, albumData.title),
+      getArtistBio(albumData.artist),
+    ]);
+
+    const description       = albumDesc || artistBio || null;
+    const descriptionSource = albumDesc ? 'album' : (artistBio ? 'artist' : null);
+
+    // Silently refresh the cached DB row (if it exists) with the latest Spotify data.
+    // This keeps release_year / cover_url up-to-date without blocking the response.
+    db.run(
+      `UPDATE albums
+       SET title        = ?,
+           artist       = ?,
+           cover_url    = ?,
+           release_year = ?
+       WHERE spotify_id = ?`,
+      albumData.title,
+      albumData.artist,
+      albumData.coverUrl,
+      albumData.releaseYear,
+      spotifyId
+    ).catch(() => {});
+
+    res.json({
+      album:             albumData,
+      tracks:            albumData.tracks,
+      weekPickCount:     pickRow?.count ?? 0,
+      appleMusicUrl,
+      description,
+      descriptionSource,
+    });
+  } catch (err) {
+    console.error('Album fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to load album.' });
+  }
+});
+
+// ── GET /albums/:spotifyId/comments ──────────────────────
+// Returns all comments for an album, newest first.
+router.get('/:spotifyId/comments', async (req, res) => {
+  const { spotifyId } = req.params;
+
+  try {
+    const db   = await getDb();
+    const rows = await db.all(
+      `SELECT c.id,
+              c.body,
+              c.created_at AS createdAt,
+              u.email      AS userEmail
+       FROM   comments c
+       JOIN   users  u ON u.id = c.user_id
+       JOIN   albums a ON a.id = c.album_id
+       WHERE  a.spotify_id = ?
+       ORDER  BY c.created_at DESC`,
+      spotifyId
+    );
+    res.json({ comments: rows });
+  } catch (err) {
+    console.error('Comments fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to load comments.' });
+  }
+});
+
+// ── POST /albums/:spotifyId/comments ─────────────────────
+// Post a comment. Body: { body, title, artist, coverUrl, releaseYear }
+// (title/artist/etc. allow us to upsert the album cache without a separate fetch)
+router.post('/:spotifyId/comments', requireAuth, async (req, res) => {
+  const { spotifyId } = req.params;
+  const { body, title, artist, coverUrl, releaseYear } = req.body;
+
+  if (!body || typeof body !== 'string' || !body.trim()) {
+    return res.status(400).json({ error: 'Comment body is required.' });
+  }
+  if (body.length > 1000) {
+    return res.status(400).json({ error: 'Comment must be 1000 characters or fewer.' });
+  }
+
+  try {
+    const db = await getDb();
+
+    // Upsert album so we always have a local album_id to foreign-key against
+    await db.run(
+      `INSERT INTO albums (spotify_id, title, artist, cover_url, release_year)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(spotify_id) DO UPDATE
+         SET title        = excluded.title,
+             artist       = excluded.artist,
+             cover_url    = excluded.cover_url,
+             release_year = excluded.release_year`,
+      spotifyId,
+      title       ?? spotifyId,
+      artist      ?? '',
+      coverUrl    ?? null,
+      releaseYear ?? null
+    );
+
+    const album = await db.get('SELECT id FROM albums WHERE spotify_id = ?', spotifyId);
+
+    await db.run(
+      'INSERT INTO comments (user_id, album_id, body) VALUES (?, ?, ?)',
+      req.session.userId, album.id, body.trim()
+    );
+
+    // Fetch the saved comment with user email to return to client
+    const saved = await db.get(
+      `SELECT c.id, c.body, c.created_at AS createdAt, u.email AS userEmail
+       FROM   comments c
+       JOIN   users u ON u.id = c.user_id
+       WHERE  c.user_id = ? AND c.album_id = ?
+       ORDER  BY c.id DESC LIMIT 1`,
+      req.session.userId, album.id
+    );
+
+    res.json({ ok: true, comment: saved });
+  } catch (err) {
+    console.error('Comment post error:', err.message);
+    res.status(500).json({ error: 'Failed to post comment.' });
+  }
+});
+
+// ── GET /albums/:spotifyId/rating ─────────────────────────
+// Returns community average (derived from track_ratings) + the logged-in user's own average.
+router.get('/:spotifyId/rating', async (req, res) => {
+  const { spotifyId } = req.params;
+  try {
+    const db = await getDb();
+
+    // Average of each user's per-track average → community album score
+    const agg = await db.get(
+      `SELECT ROUND(AVG(user_avg), 1) AS average,
+              COUNT(*)                AS count
+       FROM (
+         SELECT AVG(rating) AS user_avg
+         FROM   track_ratings
+         WHERE  album_spotify_id = ?
+         GROUP  BY user_id
+       )`,
+      spotifyId
+    );
+
+    // Current user's own average across their rated tracks for this album
+    let userRating = null;
+    if (req.session?.userId) {
+      const row = await db.get(
+        `SELECT ROUND(AVG(rating), 1) AS avg
+         FROM   track_ratings
+         WHERE  user_id = ? AND album_spotify_id = ?`,
+        req.session.userId, spotifyId
+      );
+      userRating = row?.avg ?? null;
+    }
+
+    res.json({
+      average:    agg?.average ?? null,
+      count:      agg?.count   ?? 0,
+      userRating,
+    });
+  } catch (err) {
+    console.error('Rating fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to load rating.' });
+  }
+});
+
+// ── POST /albums/:spotifyId/rating ────────────────────────
+// Submit or update a rating. Body: { rating, title, artist, coverUrl, releaseYear }
+router.post('/:spotifyId/rating', requireAuth, async (req, res) => {
+  const { spotifyId } = req.params;
+  const { rating, title, artist, coverUrl, releaseYear } = req.body;
+
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'Rating must be an integer between 1 and 5.' });
+  }
+
+  try {
+    const db = await getDb();
+
+    await db.run(
+      `INSERT INTO albums (spotify_id, title, artist, cover_url, release_year)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(spotify_id) DO UPDATE
+         SET title        = excluded.title,
+             artist       = excluded.artist,
+             cover_url    = excluded.cover_url,
+             release_year = excluded.release_year`,
+      spotifyId, title ?? spotifyId, artist ?? '', coverUrl ?? null, releaseYear ?? null
+    );
+
+    const album = await db.get('SELECT id FROM albums WHERE spotify_id = ?', spotifyId);
+
+    await db.run(
+      `INSERT INTO ratings (user_id, album_id, rating)
+       VALUES (?, ?, ?)
+       ON CONFLICT(user_id, album_id) DO UPDATE SET rating = excluded.rating`,
+      req.session.userId, album.id, rating
+    );
+
+    // Return updated aggregate
+    const agg = await db.get(
+      `SELECT ROUND(AVG(r.rating), 1) AS average, COUNT(r.id) AS count
+       FROM   ratings r WHERE r.album_id = ?`,
+      album.id
+    );
+
+    res.json({ ok: true, average: agg.average, count: agg.count, userRating: rating });
+  } catch (err) {
+    console.error('Rating post error:', err.message);
+    res.status(500).json({ error: 'Failed to save rating.' });
+  }
+});
+
+// ── GET /albums/:spotifyId/track-ratings ─────────────────
+// Returns the logged-in user's track ratings for this album.
+router.get('/:spotifyId/track-ratings', async (req, res) => {
+  const { spotifyId } = req.params;
+  if (!req.session?.userId) return res.json({ ratings: [] });
+  try {
+    const db   = await getDb();
+    const rows = await db.all(
+      `SELECT track_spotify_id AS trackId, rating
+       FROM   track_ratings
+       WHERE  user_id = ? AND album_spotify_id = ?`,
+      req.session.userId, spotifyId
+    );
+    res.json({ ratings: rows });
+  } catch (err) {
+    console.error('Track ratings fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to load track ratings.' });
+  }
+});
+
+// ── POST /albums/:spotifyId/track-ratings ─────────────────
+// Save or update a single track rating.
+router.post('/:spotifyId/track-ratings', requireAuth, async (req, res) => {
+  const { spotifyId } = req.params;
+  const { trackId, rating } = req.body;
+
+  if (!trackId || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'trackId and rating (1–5) are required.' });
+  }
+
+  try {
+    const db = await getDb();
+
+    // Save track rating
+    await db.run(
+      `INSERT INTO track_ratings (user_id, album_spotify_id, track_spotify_id, rating)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id, track_spotify_id) DO UPDATE SET rating = excluded.rating`,
+      req.session.userId, spotifyId, trackId, rating
+    );
+
+    // Return updated community average derived directly from track_ratings
+    const agg = await db.get(
+      `SELECT ROUND(AVG(user_avg), 1) AS average, COUNT(*) AS count
+       FROM (
+         SELECT AVG(rating) AS user_avg
+         FROM   track_ratings
+         WHERE  album_spotify_id = ?
+         GROUP  BY user_id
+       )`,
+      spotifyId
+    );
+
+    res.json({ ok: true, average: agg?.average ?? null, count: agg?.count ?? 0 });
+  } catch (err) {
+    console.error('Track rating post error:', err.message);
+    res.status(500).json({ error: 'Failed to save track rating.' });
+  }
+});
+
+module.exports = router;
