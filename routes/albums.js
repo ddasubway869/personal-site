@@ -82,7 +82,7 @@ router.get('/:spotifyId', async (req, res) => {
     const weekKey = isoWeekKey();
 
     // Phase 2 — all derived lookups run in parallel
-    const [pickRow, appleMusicUrl, albumDesc, artistBio] = await Promise.all([
+    const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes] = await Promise.all([
       db.get(
         `SELECT COUNT(r.id) AS count
          FROM   recommendations r
@@ -93,6 +93,18 @@ router.get('/:spotifyId', async (req, res) => {
       getAppleMusicUrl(spotifyId),
       getAlbumDescription(albumData.artist, albumData.title),
       getArtistBio(albumData.artist),
+      db.all(
+        `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username,
+                r.note
+         FROM   recommendations r
+         JOIN   users  u ON u.id  = r.user_id
+         JOIN   albums a ON a.id  = r.album_id
+         WHERE  a.spotify_id = ?
+           AND  r.note IS NOT NULL AND trim(r.note) != ''
+         ORDER  BY r.created_at DESC
+         LIMIT  6`,
+        spotifyId
+      ),
     ]);
 
     const description       = albumDesc || artistBio || null;
@@ -121,6 +133,7 @@ router.get('/:spotifyId', async (req, res) => {
       appleMusicUrl,
       description,
       descriptionSource,
+      pickNotes,
     });
   } catch (err) {
     console.error('Album fetch error:', err.message);
@@ -138,8 +151,8 @@ router.get('/:spotifyId/comments', async (req, res) => {
     const rows = await db.all(
       `SELECT c.id,
               c.body,
-              c.created_at AS createdAt,
-              u.email      AS userEmail
+              c.created_at                                                          AS createdAt,
+              COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1))    AS username
        FROM   comments c
        JOIN   users  u ON u.id = c.user_id
        JOIN   albums a ON a.id = c.album_id
@@ -194,9 +207,10 @@ router.post('/:spotifyId/comments', requireAuth, async (req, res) => {
       req.session.userId, album.id, body.trim()
     );
 
-    // Fetch the saved comment with user email to return to client
+    // Fetch the saved comment with username to return to client
     const saved = await db.get(
-      `SELECT c.id, c.body, c.created_at AS createdAt, u.email AS userEmail
+      `SELECT c.id, c.body, c.created_at AS createdAt,
+              COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username
        FROM   comments c
        JOIN   users u ON u.id = c.user_id
        WHERE  c.user_id = ? AND c.album_id = ?

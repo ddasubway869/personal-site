@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spinrate</title>
-  <link rel="stylesheet" href="style.css?v=24" />
+  <title>ARVL</title>
+  <link rel="stylesheet" href="style.css?v=33" />
 </head>
 <body>
 
@@ -44,7 +44,7 @@
     <!-- Search -->
     <section class="search-section">
       <h1 class="search-heading">What are you listening to this week?</h1>
-      <p class="search-sub">Search for an album and cast your weekly pick. The most-recommended albums rise to the top.</p>
+      <p class="search-sub">Each week, every member puts forward one album. The top three take their place.</p>
       <div class="search-wrap">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"/>
@@ -79,7 +79,7 @@
       <!-- Leaderboard -->
       <section class="lb-section">
         <div class="section-hd">
-          <h2 class="section-title">This week's picks</h2>
+          <h2 class="section-title">This week's top three</h2>
           <span class="week-label" id="week-label"></span>
         </div>
         <div id="leaderboard">
@@ -87,6 +87,18 @@
         </div>
       </section>
 
+    </div>
+
+    <!-- Recent member picks (fades in on scroll) -->
+    <div class="recent-page" id="recent-page" style="opacity:0;transform:translateY(28px);transition:opacity .75s ease,transform .75s ease;">
+      <section class="recent-section">
+        <div class="section-hd">
+          <h2 class="section-title">Also recommended this week</h2>
+        </div>
+        <div id="recent-picks-list">
+          <p class="empty-state">No picks yet — be the first!</p>
+        </div>
+      </section>
     </div>
 
   </main>
@@ -124,8 +136,13 @@
           <path d="M18 6 6 18M6 6l12 12"/>
         </svg>
       </button>
-      <h2 class="modal-title" id="reg-title">Create account</h2>
+      <h2 class="modal-title" id="reg-title">Join ARVL</h2>
       <form id="form-register" novalidate>
+        <div class="field">
+          <label for="r-username">Username</label>
+          <input id="r-username" type="text" placeholder="your_name" autocomplete="username" required />
+          <span class="field-hint">3–20 characters, letters, numbers, _ or -</span>
+        </div>
         <div class="field">
           <label for="r-email">Email</label>
           <input id="r-email" type="email" placeholder="you@example.com" autocomplete="email" required />
@@ -134,10 +151,44 @@
           <label for="r-pass">Password</label>
           <input id="r-pass" type="password" placeholder="At least 8 characters" autocomplete="new-password" required />
         </div>
-        <button type="submit" class="btn btn-submit">Create account</button>
+        <button type="submit" class="btn btn-submit">Join the club</button>
         <p class="form-status" id="reg-status" aria-live="polite"></p>
       </form>
-      <p class="modal-switch">Already have an account? <button class="link-btn" id="sw-to-login">Log in</button></p>
+      <p class="modal-switch">Already a member? <button class="link-btn" id="sw-to-login">Log in</button></p>
+    </div>
+  </div>
+
+  <!-- ── Welcome modal ──────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-welcome" hidden>
+    <div class="modal modal--welcome" role="dialog" aria-modal="true">
+      <div class="welcome-body">
+        <p class="welcome-eyebrow" id="welcome-eyebrow">Almost there.</p>
+        <h2 class="welcome-title" id="welcome-title">Check your inbox, <span id="welcome-name"></span>.</h2>
+        <p class="welcome-sub" id="welcome-sub">We sent a verification link to your email address. Click it to activate your account, then come back and log in.</p>
+        <button class="btn btn-submit" id="welcome-pick-btn">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Pick note modal ────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-pick-note" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pick-note-title">
+      <button class="modal-close" data-close="modal-pick-note" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <path d="M18 6 6 18M6 6l12 12"/>
+        </svg>
+      </button>
+      <h2 class="modal-title" id="pick-note-title">Submit your pick</h2>
+      <div class="pick-note-album-preview" id="pick-note-preview"></div>
+      <label class="form-label" for="pick-note-input">Tell us why <span class="form-label-opt">(optional)</span></label>
+      <textarea class="pick-note-textarea" id="pick-note-input"
+                placeholder="What makes this album special?" maxlength="500" rows="3"></textarea>
+      <p class="pick-note-count"><span id="pick-note-chars">0</span> / 500</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="pick-note-cancel">Cancel</button>
+        <button class="btn btn-submit" id="pick-note-submit">Submit pick</button>
+      </div>
+      <p class="form-status" id="pick-note-status" aria-live="polite"></p>
     </div>
   </div>
 
@@ -582,7 +633,7 @@
       document.getElementById('auth-loggedin').hidden   = !user;
       document.getElementById('my-pick-section').hidden = !user;
       if (user) {
-        document.getElementById('user-chip').textContent = user.email;
+        document.getElementById('user-chip').textContent = user.username || user.email;
         loadMyPick();
         checkSpotifyStatus();
       } else {
@@ -620,9 +671,23 @@
         const d = await r.json();
         if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
         closeModal('modal-login');
-        applyAuthUI({ email: d.email });
-        showToast('Welcome back!');
-        if (pendingPick) { const p = pendingPick; pendingPick = null; await doRecommend(p); }
+        applyAuthUI({ email: d.email, username: d.username });
+        loadLeaderboard();
+        if (sessionStorage.getItem('freshVerify')) {
+          sessionStorage.removeItem('freshVerify');
+          document.getElementById('welcome-eyebrow').textContent = "You're in.";
+          document.getElementById('welcome-title').innerHTML     = `Welcome to ARVL, <span id="welcome-name">${d.username}</span>.`;
+          document.getElementById('welcome-sub').textContent     = "Each week, every member puts forward one album. The top picks take their place.";
+          document.getElementById('welcome-pick-btn').textContent = 'Make your first pick';
+          document.getElementById('welcome-pick-btn').onclick = () => {
+            closeModal('modal-welcome');
+            setTimeout(() => document.getElementById('search-input')?.focus(), 150);
+          };
+          openModal('modal-welcome');
+        } else {
+          showToast('Welcome back!');
+        }
+        if (pendingPick) { const p = pendingPick; pendingPick = null; openPickNoteModal(p); }
       } catch {
         status.textContent = 'Something went wrong.';
         status.className = 'form-status err';
@@ -634,36 +699,45 @@
     // ── Register ───────────────────────────────────────────
     document.getElementById('form-register').addEventListener('submit', async e => {
       e.preventDefault();
-      const status = document.getElementById('reg-status');
-      const btn    = e.target.querySelector('[type=submit]');
-      const email  = document.getElementById('r-email').value;
-      const pass   = document.getElementById('r-pass').value;
-      btn.disabled = true; btn.textContent = 'Creating…';
+      const status   = document.getElementById('reg-status');
+      const btn      = e.target.querySelector('[type=submit]');
+      const username = document.getElementById('r-username').value.trim();
+      const email    = document.getElementById('r-email').value.trim();
+      const pass     = document.getElementById('r-pass').value;
+      btn.disabled = true; btn.textContent = 'Joining…';
       status.textContent = ''; status.className = 'form-status';
 
       try {
         const r = await fetch('/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password: pass }),
+          body: JSON.stringify({ username, email, password: pass }),
         });
         const d = await r.json();
         if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
-        status.textContent = 'Check your email to verify your account.';
-        status.className = 'form-status ok';
+        closeModal('modal-register');
         e.target.reset();
+        // Show welcome moment
+        document.getElementById('welcome-name').textContent = username;
+        openModal('modal-welcome');
       } catch {
         status.textContent = 'Something went wrong.';
         status.className = 'form-status err';
       } finally {
-        btn.disabled = false; btn.textContent = 'Create account';
+        btn.disabled = false; btn.textContent = 'Join the club';
       }
+    });
+
+    // ── Welcome modal CTA ──────────────────────────────────
+    document.getElementById('welcome-pick-btn').addEventListener('click', () => {
+      closeModal('modal-welcome');
     });
 
     // ── Logout ─────────────────────────────────────────────
     document.getElementById('btn-logout').addEventListener('click', async () => {
       await fetch('/auth/logout', { method: 'POST' });
       applyAuthUI(null);
+      loadLeaderboard();
       myPickId = null;
       showToast('Logged out.');
     });
@@ -687,19 +761,15 @@
       }
       const bg = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
       el.innerHTML = `
-        <div class="my-pick-card">
+        <button class="my-pick-card my-pick-card--btn" aria-label="Open ${esc(album.title)}">
           <div class="pick-cover" ${bg}></div>
           <div class="pick-info">
             <span class="pick-title">${esc(album.title)}</span>
             <span class="pick-artist">${esc(album.artist)}</span>
           </div>
-          <button class="btn btn-ghost btn--sm" id="btn-change">Change</button>
-        </div>
+        </button>
       `;
-      document.getElementById('btn-change')?.addEventListener('click', () => {
-        document.getElementById('search-input').focus();
-        document.querySelector('.search-section').scrollIntoView({ behavior: 'smooth' });
-      });
+      el.querySelector('.my-pick-card--btn').addEventListener('click', () => openAlbumPanel(album.spotifyId, album));
     }
 
     // ── Leaderboard ────────────────────────────────────────
@@ -719,7 +789,7 @@
       }
       el.innerHTML = '';
       const grid = document.createElement('div');
-      grid.className = 'lb-grid';
+      grid.className = me ? 'lb-grid' : 'lb-grid lb-grid--locked';
       albums.forEach((a, i) => {
         const yearBadge  = a.releaseYear ? `<span class="lb-year">${esc(a.releaseYear)}</span>` : '';
         const meta       = yearBadge ? `<div class="lb-meta">${yearBadge}</div>` : '';
@@ -744,21 +814,54 @@
         card.querySelector('.lb-card-btn').addEventListener('click', () => openAlbumPanel(a.spotifyId, a));
         grid.appendChild(card);
       });
-      el.appendChild(grid);
+      if (!me) {
+        const wrap = document.createElement('div');
+        wrap.className = 'lb-locked-wrap';
+        wrap.appendChild(grid);
+        const gate = document.createElement('div');
+        gate.className = 'lb-locked-gate';
+        gate.innerHTML = `
+          <p class="lb-locked-msg">Members only — join to see this week's top three</p>
+          <button class="btn btn-submit lb-locked-join">Join the club</button>
+        `;
+        gate.querySelector('.lb-locked-join').addEventListener('click', () => openModal('modal-register'));
+        wrap.appendChild(gate);
+        el.appendChild(wrap);
+      } else {
+        el.appendChild(grid);
+      }
     }
 
     // ── Recommend ──────────────────────────────────────────
-    async function doRecommend(album) {
+    let _pendingPickAlbum = null;
+
+    function openPickNoteModal(album) {
       if (!me) {
         pendingPick = album;
         openModal('modal-login');
         return;
       }
+      _pendingPickAlbum = album;
+      const bg = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
+      document.getElementById('pick-note-preview').innerHTML = `
+        <div class="pick-note-cover" ${bg}></div>
+        <div class="pick-note-meta">
+          <p class="pick-note-title">${esc(album.title)}</p>
+          <p class="pick-note-artist">${esc(album.artist)}</p>
+        </div>
+      `;
+      document.getElementById('pick-note-input').value = '';
+      document.getElementById('pick-note-chars').textContent = '0';
+      document.getElementById('pick-note-status').textContent = '';
+      openModal('modal-pick-note');
+    }
+
+    async function doRecommend(album, note = null) {
       try {
         const r = await fetch('/recommendations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(album),
+          body: JSON.stringify({ ...album, note }),
         });
         const d = await r.json();
         if (!r.ok) { showToast(d.error || 'Error saving pick.', 'err'); return; }
@@ -776,6 +879,20 @@
         showToast('Error saving pick.', 'err');
       }
     }
+
+    // Pick note modal wiring
+    document.getElementById('pick-note-input').addEventListener('input', e => {
+      document.getElementById('pick-note-chars').textContent = e.target.value.length;
+    });
+    document.getElementById('pick-note-cancel').addEventListener('click', () => closeModal('modal-pick-note'));
+    document.getElementById('pick-note-submit').addEventListener('click', async () => {
+      const note = document.getElementById('pick-note-input').value.trim() || null;
+      const btn  = document.getElementById('pick-note-submit');
+      btn.disabled = true;
+      await doRecommend(_pendingPickAlbum, note);
+      closeModal('modal-pick-note');
+      btn.disabled = false;
+    });
 
     // ── Search ─────────────────────────────────────────────
     let _searchTimer;
@@ -860,7 +977,7 @@
           document.getElementById('search-results').hidden = true;
           openAlbumPanel(album.spotifyId, album);
         });
-        row.querySelector('.btn-pick').addEventListener('click', () => doRecommend(album));
+        row.querySelector('.btn-pick').addEventListener('click', () => openPickNoteModal(album));
         el.appendChild(row);
       });
     }
@@ -935,7 +1052,7 @@
         fetch(`/albums/${encodeURIComponent(spotifyId)}/comments`).then(r => r.json()),
       ]).then(([albumRes, commentsRes]) => {
         if (_panelSpotifyId !== spotifyId) return; // panel switched
-        renderAlbumPanel(albumRes.album, albumRes.tracks, albumRes.weekPickCount, commentsRes.comments ?? [], albumRes.appleMusicUrl ?? null, albumRes.description ?? null, albumRes.descriptionSource ?? null);
+        renderAlbumPanel(albumRes.album, albumRes.tracks, albumRes.weekPickCount, commentsRes.comments ?? [], albumRes.appleMusicUrl ?? null, albumRes.description ?? null, albumRes.descriptionSource ?? null, albumRes.pickNotes ?? []);
       }).catch(() => {
         if (_panelSpotifyId !== spotifyId) return;
         document.getElementById('ap-inner').innerHTML = '<p class="ap-loading" style="color:var(--error)">Failed to load album.</p>';
@@ -1206,7 +1323,7 @@
       });
     }
 
-    function renderAlbumPanel(album, tracks, weekPickCount, comments, appleMusicUrl = null, description = null, descriptionSource = null) {
+    function renderAlbumPanel(album, tracks, weekPickCount, comments, appleMusicUrl = null, description = null, descriptionSource = null, pickNotes = []) {
       const inner  = document.getElementById('ap-inner');
       const isPick = album.spotifyId === myPickId;
 
@@ -1223,7 +1340,7 @@
             <span class="track-name">${esc(t.name)}</span>
             ${t.artist !== album.artist ? `<span class="track-feat">${esc(t.artist)}</span>` : ''}
           </div>
-          <div class="track-stars" data-track-id="${esc(t.id)}">
+          <div class="track-stars${me ? '' : ' track-stars--locked'}" data-track-id="${esc(t.id)}">
             ${[1,2,3,4,5].map(i => `<button class="t-star" data-value="${i}">★</button>`).join('')}
           </div>
           <span class="track-duration">${fmtDuration(t.durationMs)}</span>
@@ -1294,6 +1411,16 @@
             </iframe>
           </div>
         </div>
+
+        ${pickNotes.length ? `
+        <div class="ap-section ap-pick-notes-section">
+          <h3 class="ap-section-title">Why members picked this</h3>
+          ${pickNotes.map(n => `
+            <div class="ap-pick-note">
+              <p class="ap-pick-note-text">"${esc(n.note)}"</p>
+              <p class="ap-pick-note-by">— ${esc(n.username)}</p>
+            </div>`).join('')}
+        </div>` : ''}
 
         <div class="ap-section" id="ap-comments-section">
           <h3 class="ap-section-title">Comments</h3>
@@ -1482,7 +1609,7 @@
       });
 
       // Pick button
-      inner.querySelector('.ap-pick-btn')?.addEventListener('click', () => doRecommend(album));
+      inner.querySelector('.ap-pick-btn')?.addEventListener('click', () => openPickNoteModal(album));
 
       // Login prompt
       inner.querySelector('#ap-login-prompt-btn')?.addEventListener('click', () => {
@@ -1532,7 +1659,7 @@
     }
 
     function commentItemHtml(c) {
-      const name = c.userEmail ? c.userEmail.split('@')[0] : 'user'; // TODO: replace with username
+      const name = c.username || 'member';
       return `
         <div class="comment-item">
           <span class="comment-author">${esc(name)}</span>
@@ -1579,9 +1706,12 @@
       await refreshAuth();
       await loadLeaderboard();
       loadCarousel();
+      loadRecentPicks();
       if (new URLSearchParams(location.search).get('verified') === '1') {
-        showToast('Email verified! You can now log in.');
+        sessionStorage.setItem('freshVerify', '1');
+        showToast('Email verified! Log in to get started.');
         history.replaceState(null, '', '/');
+        setTimeout(() => openModal('modal-login'), 400);
       }
     })();
 
@@ -1608,11 +1738,58 @@
       } catch {}
     }
 
+    // ── Recent member picks ─────────────────────────────────
+    async function loadRecentPicks() {
+      try {
+        const r = await fetch('/recommendations/recent');
+        const d = await r.json();
+        renderRecentPicks(d.picks || []);
+      } catch {}
+    }
+
+    function renderRecentPicks(picks) {
+      const el = document.getElementById('recent-picks-list');
+      if (!picks.length) {
+        el.innerHTML = '<p class="empty-state">No picks yet — be the first!</p>';
+        return;
+      }
+      el.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.className = 'rp-grid';
+      picks.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'rp-card';
+        const bg = p.coverUrl ? `style="background-image:url('${esc(p.coverUrl)}')"` : '';
+        card.innerHTML = `
+          <button class="rp-card-btn" aria-label="Open ${esc(p.title)}">
+            <div class="rp-cover" ${bg}></div>
+            <div class="rp-info">
+              <p class="rp-title">${esc(p.title)}</p>
+              <p class="rp-artist">${esc(p.artist)}${p.releaseYear ? ` · ${esc(p.releaseYear)}` : ''}</p>
+            </div>
+          </button>
+        `;
+        card.querySelector('.rp-card-btn').addEventListener('click', () => openAlbumPanel(p.spotifyId, p));
+        grid.appendChild(card);
+      });
+      el.appendChild(grid);
+    }
+
+    // ── Scroll hints ────────────────────────────────────────
+    document.getElementById('hint-to-picks')?.addEventListener('click', () => {
+      document.getElementById('picks-page').scrollIntoView({ behavior: 'smooth' });
+    });
+    document.getElementById('hint-to-recent')?.addEventListener('click', () => {
+      document.getElementById('recent-page').scrollIntoView({ behavior: 'smooth' });
+    });
+
     // ── Magazine scroll effect ──────────────────────────────
     const searchSection = document.querySelector('.search-section');
     const fadeInSections = document.querySelectorAll('.picks-page');
+    const recentPage     = document.getElementById('recent-page');
+    const recentSection  = recentPage?.querySelector('.recent-section');
 
-    window.addEventListener('scroll', () => {
+    function handleScroll() {
       const scrollY  = window.scrollY;
       const vh       = window.innerHeight;
 
@@ -1627,7 +1804,22 @@
           s.classList.remove('visible');
         }
       });
-    }, { passive: true });
+
+      // Fade in recent page — trigger when the inner content section enters view
+      if (recentPage && recentSection) {
+        const rect = recentSection.getBoundingClientRect();
+        if (rect.top < vh * 0.85) {
+          recentPage.style.opacity = '1';
+          recentPage.style.transform = 'translateY(0)';
+        } else {
+          recentPage.style.opacity = '0';
+          recentPage.style.transform = 'translateY(28px)';
+        }
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // run once on load to set correct initial state
   </script>
 </body>
 </html>

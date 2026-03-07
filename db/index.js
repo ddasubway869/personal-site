@@ -102,6 +102,10 @@ async function getDb() {
     'ALTER TABLE users ADD COLUMN spotify_access_token  TEXT',
     'ALTER TABLE users ADD COLUMN spotify_refresh_token TEXT',
     'ALTER TABLE users ADD COLUMN spotify_token_expires INTEGER',
+    // Display name shown publicly instead of email
+    'ALTER TABLE users ADD COLUMN username TEXT',
+    // Optional "tell us why" note attached to a weekly recommendation
+    'ALTER TABLE recommendations ADD COLUMN note TEXT',
   ]) {
     try { await _db.run(stmt); } catch { /* column already exists */ }
   }

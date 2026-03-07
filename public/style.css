@@ -286,7 +286,8 @@ html.light .icon-moon { display: block; }
   justify-content: center;
   align-items: center;
   text-align: center;
-  padding: 2rem 1.25rem 15%;
+  padding: 1rem 1.25rem 8rem;
+  justify-content: center;
   position: sticky;
   top: var(--header-h);
   will-change: opacity;
@@ -325,10 +326,10 @@ html.light .icon-moon { display: block; }
   left: 0;
   right: 0;
   overflow: hidden;
-  height: 96px;
+  height: 116px;
   mask-image: linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%);
   -webkit-mask-image: linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%);
-  opacity: .35;
+  opacity: .5;
   pointer-events: none;
 }
 
@@ -459,6 +460,138 @@ html.light .icon-moon { display: block; }
 }
 
 /* ── Picks page (full-viewport "page 2") ─────────────────── */
+/* ── Scroll hint chevrons ─────────────────────────────────── */
+.scroll-hint {
+  position: absolute;
+  bottom: 1.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .3rem;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity .2s;
+  padding: .5rem;
+  user-select: none;
+}
+.scroll-hint:hover { opacity: 0.85; }
+
+.scroll-hint-label {
+  font-size: .65rem;
+  font-weight: 500;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.scroll-chevron {
+  color: var(--muted);
+  animation: bounce-chevron 2.2s ease-in-out infinite;
+}
+
+@keyframes bounce-chevron {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(6px); }
+}
+
+/* ── Recent picks page ───────────────────────────────────── */
+.recent-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 0 4rem;
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity .75s ease, transform .75s ease;
+}
+.recent-page.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.recent-section {
+  max-width: 720px;
+  width: 100%;
+  padding: 0 1.25rem 2.5rem;
+}
+
+.rp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: .75rem;
+}
+@media (max-width: 480px) { .rp-grid { grid-template-columns: 1fr; } }
+
+.rp-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.rp-card-btn {
+  display: flex;
+  align-items: center;
+  gap: .875rem;
+  padding: .75rem;
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.rp-card-btn:hover .rp-title { text-decoration: underline; text-underline-offset: 2px; }
+
+.rp-cover {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-sm);
+  background: var(--border);
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.rp-info {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  min-width: 0;
+}
+
+.rp-title {
+  font-size: .875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-artist {
+  font-size: .75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-picked-by {
+  font-size: .7rem;
+  color: var(--muted);
+  margin-top: .1rem;
+  opacity: 0.75;
+}
+
+/* ── Picks page ──────────────────────────────────────────── */
 .picks-page {
   min-height: calc(100dvh - var(--header-h));
   display: flex;
@@ -525,7 +658,13 @@ html.light .icon-moon { display: block; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: box-shadow .2s;
 }
+.my-pick-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.35); }
 
 .pick-cover {
   width: 52px;
@@ -673,6 +812,54 @@ html.light .icon-moon { display: block; }
   font-weight: 600;
   color: var(--subtle);
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Locked leaderboard (logged-out) ─────────────────────── */
+.lb-locked-wrap {
+  position: relative;
+}
+
+.lb-grid--locked {
+  pointer-events: none;
+  user-select: none;
+}
+
+.lb-grid--locked .lb-card-cover {
+  filter: blur(12px);
+}
+
+.lb-grid--locked .lb-card-body,
+.lb-grid--locked .lb-card-footer {
+  filter: blur(10px);
+}
+
+.lb-locked-gate {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: var(--radius);
+  z-index: 2;
+}
+
+.lb-locked-msg {
+  font-size: .875rem;
+  color: var(--muted);
+  text-align: center;
+  max-width: 220px;
+  line-height: 1.4;
+}
+
+/* ── Locked track stars (logged-out) ────────────────────── */
+.track-stars--locked .t-star {
+  opacity: 0.25;
+  cursor: default;
 }
 
 /* ── Search results panel overlay ───────────────────────── */
@@ -1094,6 +1281,85 @@ html.light .icon-moon { display: block; }
   color: var(--subtle);
 }
 
+/* ── Pick note modal ─────────────────────────────────────── */
+.pick-note-album-preview {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .75rem;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+}
+.pick-note-cover {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--border) center/cover no-repeat;
+  flex-shrink: 0;
+}
+.pick-note-meta { min-width: 0; }
+.pick-note-title {
+  font-size: .875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pick-note-artist {
+  font-size: .75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.form-label-opt { color: var(--muted); font-weight: 400; }
+.pick-note-textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: .875rem;
+  font-family: inherit;
+  padding: .625rem .75rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+.pick-note-textarea:focus { outline: none; border-color: var(--subtle); }
+.pick-note-count {
+  font-size: .75rem;
+  color: var(--muted);
+  text-align: right;
+  margin-top: .25rem;
+  margin-bottom: .75rem;
+}
+.modal-actions {
+  display: flex;
+  gap: .5rem;
+  justify-content: flex-end;
+}
+
+/* ── Pick notes in album panel ───────────────────────────── */
+.ap-pick-notes-section {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.ap-pick-note { margin-bottom: .875rem; }
+.ap-pick-note:last-child { margin-bottom: 0; }
+.ap-pick-note-text {
+  font-size: .9rem;
+  line-height: 1.55;
+  color: var(--text);
+  font-style: italic;
+}
+.ap-pick-note-by {
+  font-size: .75rem;
+  color: var(--muted);
+  margin-top: .25rem;
+}
+
 .ap-spotify-embed {
   padding: 0;
 }
@@ -1244,15 +1510,14 @@ html.light .icon-moon { display: block; }
   padding: 0;
   width: 1rem;
   font-size: .6rem;
-  color: var(--muted);
+  color: var(--border);
   cursor: pointer;
   flex-shrink: 0;
-  opacity: 0;
-  transition: opacity .15s, color .15s;
+  opacity: 1;
+  transition: color .15s;
   line-height: 1;
 }
-.track-row:hover .track-play-btn { opacity: 1; }
-.track-play-btn:hover             { color: var(--text); }
+.track-play-btn:hover { color: var(--text); }
 
 /* ── Spotify play popover ────────────────────────────────── */
 .play-popover {
@@ -1490,7 +1755,38 @@ html.light .icon-moon { display: block; }
   margin-top: 1rem;
 }
 
+/* ── Welcome modal ───────────────────────────────────────── */
+.modal--welcome {
+  text-align: center;
+  padding: 3rem 2.5rem;
+}
+.welcome-eyebrow {
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 .5rem;
+}
+.welcome-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 .75rem;
+  line-height: 1.2;
+}
+.welcome-sub {
+  font-size: .875rem;
+  color: var(--muted);
+  margin: 0 0 1.75rem;
+  line-height: 1.5;
+}
+
 /* ── Form fields ─────────────────────────────────────────── */
+.field-hint {
+  font-size: .75rem;
+  color: var(--muted);
+  margin-top: -.1rem;
+}
 .field {
   display: flex;
   flex-direction: column;

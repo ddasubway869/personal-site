@@ -17,14 +17,19 @@ function isoWeekKey(date = new Date()) {
 }
 
 // ── POST /recommend ───────────────────────────────────────
-// Body: { spotifyId, title, artist, coverUrl, releaseYear }
+// Body: { spotifyId, title, artist, coverUrl, releaseYear, note? }
 // One recommendation per logged-in user per ISO week.
 router.post('/', requireAuth, async (req, res) => {
-  const { spotifyId, title, artist, coverUrl, releaseYear } = req.body;
+  const { spotifyId, title, artist, coverUrl, releaseYear, note: rawNote } = req.body;
 
   if (!spotifyId || !title || !artist) {
     return res.status(400).json({ error: 'spotifyId, title and artist are required.' });
   }
+
+  // note is optional; trim and cap at 500 chars
+  const note = (typeof rawNote === 'string' && rawNote.trim())
+    ? rawNote.trim().slice(0, 500)
+    : null;
 
   const weekKey = isoWeekKey();
 
@@ -55,8 +60,8 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     await db.run(
-      'INSERT INTO recommendations (user_id, album_id, week_key) VALUES (?, ?, ?)',
-      req.session.userId, album.id, weekKey
+      'INSERT INTO recommendations (user_id, album_id, week_key, note) VALUES (?, ?, ?, ?)',
+      req.session.userId, album.id, weekKey, note
     );
 
     res.json({ ok: true, weekKey });
@@ -75,24 +80,49 @@ router.get('/', async (req, res) => {
   try {
     const db   = await getDb();
     const rows = await db.all(
-      `SELECT a.spotify_id  AS spotifyId,
+      `SELECT a.spotify_id   AS spotifyId,
               a.title,
               a.artist,
-              a.cover_url   AS coverUrl,
+              a.cover_url    AS coverUrl,
               a.release_year AS releaseYear,
-              COUNT(r.id)   AS count
+              COUNT(r.id)    AS count
        FROM   recommendations r
        JOIN   albums a ON a.id = r.album_id
        WHERE  r.week_key = ?
        GROUP  BY r.album_id
-       ORDER  BY count DESC, a.title ASC
-       LIMIT  50`,
+       ORDER  BY count DESC, MAX(r.created_at) DESC
+       LIMIT  3`,
       weekKey
     );
 
     res.json({ weekKey, albums: rows });
   } catch (err) {
     console.error('Recommendations fetch error:', err.message);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── GET /recommendations/recent ──────────────────────────
+// Returns the 6 most recent picks across all users and weeks.
+router.get('/recent', async (req, res) => {
+  try {
+    const db   = await getDb();
+    const rows = await db.all(
+      `SELECT a.spotify_id   AS spotifyId,
+              a.title,
+              a.artist,
+              a.cover_url    AS coverUrl,
+              a.release_year AS releaseYear,
+              COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS pickedBy
+       FROM   recommendations r
+       JOIN   albums a ON a.id = r.album_id
+       JOIN   users u ON u.id = r.user_id
+       ORDER  BY r.created_at DESC
+       LIMIT  6`
+    );
+    res.json({ picks: rows });
+  } catch (err) {
+    console.error('Recent picks error:', err.message);
     res.status(500).json({ error: 'Server error.' });
   }
 });
