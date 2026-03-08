@@ -47,19 +47,6 @@ async function start() {
   app.use('/artists',         artistRoutes);
   app.use('/player',          playerRoutes);
 
-  // TEMP: one-time cleanup — remove after use
-  app.get('/admin/clear-unverified', async (req, res) => {
-    if (req.query.secret !== process.env.SESSION_SECRET) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    const db = await getDb();
-    const { changes } = await db.run(
-      'DELETE FROM users WHERE verified = 0 OR verified IS NULL'
-    );
-    await db.run('DELETE FROM verification_tokens');
-    res.json({ deleted: changes });
-  });
-
   app.post('/contact', async (req, res) => {
     const { name, email, message } = req.body;
     if (!name || !email || !message) {
