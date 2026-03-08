@@ -1,7 +1,7 @@
 {
-  "name": "personal-site",
+  "name": "arvl",
   "version": "1.0.0",
-  "description": "Personal website with Express contact form",
+  "description": "Album recommendation community — one pick per member per week",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
