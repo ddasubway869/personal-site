@@ -96,6 +96,15 @@ async function getDb() {
       created_at       INTEGER NOT NULL DEFAULT (unixepoch()),
       UNIQUE(user_id, track_spotify_id)
     );
+
+    -- User-submitted feedback
+    CREATE TABLE IF NOT EXISTS feedback (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      category   TEXT    NOT NULL DEFAULT 'general',
+      message    TEXT    NOT NULL CHECK(length(message) <= 2000),
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
   `);
 
   // ── Migrations (safe to re-run; errors ignored if column exists) ──

@@ -12,6 +12,7 @@ const recommendRoutes      = require('./routes/recommendations');
 const albumRoutes          = require('./routes/albums');
 const artistRoutes         = require('./routes/artists');
 const playerRoutes         = require('./routes/player');
+const feedbackRoutes       = require('./routes/feedback');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -46,6 +47,7 @@ async function start() {
   app.use('/albums',          albumRoutes);
   app.use('/artists',         artistRoutes);
   app.use('/player',          playerRoutes);
+  app.use('/feedback',        feedbackRoutes);
 
   app.post('/contact', async (req, res) => {
     const { name, email, message } = req.body;

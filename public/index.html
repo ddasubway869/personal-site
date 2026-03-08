@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ARVL</title>
-  <link rel="stylesheet" href="style.css?v=34" />
+  <link rel="stylesheet" href="style.css?v=35" />
 </head>
 <body>
 
@@ -1820,6 +1820,89 @@
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll(); // run once on load to set correct initial state
+
+    // ── Footer buttons ─────────────────────────────────────
+    document.getElementById('btn-about')?.addEventListener('click', () => openModal('modal-about'));
+    document.getElementById('btn-feedback')?.addEventListener('click', () => {
+      if (!state.user) { openModal('modal-login'); return; }
+      openModal('modal-feedback');
+    });
+
+    // ── Feedback form ──────────────────────────────────────
+    document.getElementById('form-feedback')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const category = document.getElementById('fb-category').value;
+      const message  = document.getElementById('fb-message').value.trim();
+      const status   = document.getElementById('feedback-status');
+      status.textContent = '';
+      if (!message) { status.textContent = 'Please enter a message.'; return; }
+      const r = await fetch('/feedback', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ category, message }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        closeModal('modal-feedback');
+        document.getElementById('form-feedback').reset();
+        showToast('Feedback sent — thanks!');
+      } else {
+        status.textContent = d.error || 'Something went wrong.';
+      }
+    });
   </script>
+
+  <!-- ── Footer ─────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <span class="footer-copy">© 2026 ARVL</span>
+      <div class="footer-links">
+        <button class="footer-link" id="btn-about">About</button>
+        <button class="footer-link" id="btn-feedback">Feedback</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ── About modal ────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-about" hidden>
+    <div class="modal modal--about" role="dialog" aria-modal="true">
+      <button class="modal-close" data-close="modal-about" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <h2 class="modal-title">About ARVL</h2>
+      <div class="about-body">
+        <p>I built ARVL because I was tired of algorithms telling me what to listen to.</p>
+        <p>Discover Weekly gives you songs. The charts give you whatever's trending. None of it felt personal.</p>
+        <p>ARVL is different. One album a week, picked by a real person in the community. Just people who actually listen to albums — front to back — recommending what they're genuinely into.</p>
+        <p class="about-sig">Built by an album listener, for album listeners.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Feedback modal ─────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-feedback" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
+      <button class="modal-close" data-close="modal-feedback" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <h2 class="modal-title" id="feedback-title">Send feedback</h2>
+      <form id="form-feedback" novalidate>
+        <div class="field">
+          <label for="fb-category">Type</label>
+          <select id="fb-category">
+            <option value="general">General</option>
+            <option value="bug">Bug report</option>
+            <option value="feature">Feature request</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fb-message">Message</label>
+          <textarea id="fb-message" placeholder="Tell us what you think..." rows="5" maxlength="2000"></textarea>
+        </div>
+        <button type="submit" class="btn btn-submit">Send</button>
+        <p class="form-status" id="feedback-status" aria-live="polite"></p>
+      </form>
+    </div>
+  </div>
 </body>
 </html>
