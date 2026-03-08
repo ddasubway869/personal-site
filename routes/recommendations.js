@@ -103,8 +103,10 @@ router.get('/', async (req, res) => {
 });
 
 // ── GET /recommendations/recent ──────────────────────────
-// Returns the 6 most recent picks across all users and weeks.
+// Returns the 6 most recent picks across all users and weeks,
+// excluding albums already in the current week's top 3.
 router.get('/recent', async (req, res) => {
+  const weekKey = isoWeekKey();
   try {
     const db   = await getDb();
     const rows = await db.all(
@@ -117,8 +119,17 @@ router.get('/recent', async (req, res) => {
        FROM   recommendations r
        JOIN   albums a ON a.id = r.album_id
        JOIN   users u ON u.id = r.user_id
+       WHERE  a.id NOT IN (
+         SELECT r2.album_id
+         FROM   recommendations r2
+         WHERE  r2.week_key = ?
+         GROUP  BY r2.album_id
+         ORDER  BY COUNT(r2.id) DESC
+         LIMIT  3
+       )
        ORDER  BY r.created_at DESC
-       LIMIT  6`
+       LIMIT  6`,
+      weekKey
     );
     res.json({ picks: rows });
   } catch (err) {
