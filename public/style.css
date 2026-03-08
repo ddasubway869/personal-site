@@ -2015,7 +2015,6 @@ input[type="text"]:focus          { border-color: var(--subtle); box-shadow: 0 0
 
 /* ── Footer ──────────────────────────────────────────────── */
 .site-footer {
-  border-top: 1px solid var(--border);
   padding: 1.5rem 0;
   margin-top: 4rem;
 }
@@ -2064,6 +2063,17 @@ input[type="text"]:focus          { border-color: var(--subtle); box-shadow: 0 0
   color: var(--text) !important;
   font-style: italic;
   padding-top: .25rem;
+}
+.about-attribution {
+  color: var(--muted);
+  font-size: .875rem;
+  margin-top: -.25rem;
+}
+.about-contact {
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
+  margin-top: .5rem;
 }
 
 /* ── Feedback modal ──────────────────────────────────────── */

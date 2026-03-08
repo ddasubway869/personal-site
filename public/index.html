@@ -1820,39 +1820,8 @@
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll(); // run once on load to set correct initial state
-
-    // ── Footer buttons ─────────────────────────────────────
-    document.getElementById('btn-about')?.addEventListener('click', () => openModal('modal-about'));
-    document.getElementById('btn-feedback')?.addEventListener('click', () => {
-      if (!state.user) { openModal('modal-login'); return; }
-      openModal('modal-feedback');
-    });
-
-    // ── Feedback form ──────────────────────────────────────
-    document.getElementById('form-feedback')?.addEventListener('submit', async e => {
-      e.preventDefault();
-      const category = document.getElementById('fb-category').value;
-      const message  = document.getElementById('fb-message').value.trim();
-      const status   = document.getElementById('feedback-status');
-      status.textContent = '';
-      if (!message) { status.textContent = 'Please enter a message.'; return; }
-      const r = await fetch('/feedback', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ category, message }),
-      });
-      const d = await r.json();
-      if (r.ok) {
-        closeModal('modal-feedback');
-        document.getElementById('form-feedback').reset();
-        showToast('Feedback sent — thanks!');
-      } else {
-        status.textContent = d.error || 'Something went wrong.';
-      }
-    });
   </script>
 
-  <!-- ── Footer ─────────────────────────────────────────── -->
   <footer class="site-footer">
     <div class="footer-inner">
       <span class="footer-copy">© 2026 ARVL</span>
@@ -1871,10 +1840,11 @@
       </button>
       <h2 class="modal-title">About ARVL</h2>
       <div class="about-body">
-        <p>I built ARVL because I was tired of algorithms telling me what to listen to.</p>
-        <p>Discover Weekly gives you songs. The charts give you whatever's trending. None of it felt personal.</p>
-        <p>ARVL is different. One album a week, picked by a real person in the community. Just people who actually listen to albums — front to back — recommending what they're genuinely into.</p>
+        <p>Like many people, I got tired of algorithms telling me what to listen to. Discover Weekly gives you songs. The charts give you whatever's trending. None of it felt personal.</p>
+        <p>So I built ARVL. One album a week, picked by a real person in the community. Just people who actually listen to albums, front to back, recommending what they're genuinely into.</p>
         <p class="about-sig">Built by an album listener, for album listeners.</p>
+        <p class="about-attribution">Thank you for being here — DeAndre</p>
+        <a class="btn btn-submit about-contact" href="mailto:hello@arvl.app">Get in touch</a>
       </div>
     </div>
   </div>
@@ -1904,5 +1874,44 @@
       </form>
     </div>
   </div>
+
+  <script>
+    // ── Close handlers for late-rendered modals ────────────
+    ['modal-about', 'modal-feedback'].forEach(id => {
+      const overlay = document.getElementById(id);
+      overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(id); });
+      overlay.querySelector('[data-close]')?.addEventListener('click', () => closeModal(id));
+    });
+
+    // ── Footer buttons ─────────────────────────────────────
+    document.getElementById('btn-about').addEventListener('click', () => openModal('modal-about'));
+    document.getElementById('btn-feedback').addEventListener('click', () => {
+      if (!me) { openModal('modal-login'); return; }
+      openModal('modal-feedback');
+    });
+
+    // ── Feedback form ──────────────────────────────────────
+    document.getElementById('form-feedback').addEventListener('submit', async e => {
+      e.preventDefault();
+      const category = document.getElementById('fb-category').value;
+      const message  = document.getElementById('fb-message').value.trim();
+      const status   = document.getElementById('feedback-status');
+      status.textContent = '';
+      if (!message) { status.textContent = 'Please enter a message.'; return; }
+      const r = await fetch('/feedback', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ category, message }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        closeModal('modal-feedback');
+        document.getElementById('form-feedback').reset();
+        showToast('Feedback sent — thanks!');
+      } else {
+        status.textContent = d.error || 'Something went wrong.';
+      }
+    });
+  </script>
 </body>
 </html>
