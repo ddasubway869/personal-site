@@ -1,0 +1,372 @@
+'use strict';
+const express   = require('express');
+const router    = express.Router();
+const { getDb } = require('../db');
+
+function requireSecret(req, res, next) {
+  if (req.query.secret !== process.env.SESSION_SECRET) {
+    return res.status(403).send('Forbidden');
+  }
+  next();
+}
+
+router.get('/dashboard', requireSecret, async (req, res) => {
+  const db = await getDb();
+
+  const [users, picks, feedback] = await Promise.all([
+    db.all(`
+      SELECT username, email, verified,
+             datetime(created_at, 'unixepoch') AS joined
+      FROM   users
+      ORDER  BY created_at DESC
+    `),
+    db.all(`
+      SELECT u.username, u.email,
+             al.title, al.artist, al.cover_url,
+             r.week_key, r.note,
+             datetime(r.created_at, 'unixepoch') AS picked_at
+      FROM   recommendations r
+      JOIN   users  u  ON u.id  = r.user_id
+      JOIN   albums al ON al.id = r.album_id
+      ORDER  BY r.created_at DESC
+      LIMIT  100
+    `),
+    db.all(`
+      SELECT COALESCE(u.username, u.email, 'anonymous') AS user,
+             f.category, f.message,
+             datetime(f.created_at, 'unixepoch') AS submitted_at
+      FROM   feedback f
+      LEFT JOIN users u ON u.id = f.user_id
+      ORDER  BY f.created_at DESC
+    `),
+  ]);
+
+  const secret = req.query.secret;
+  const totalUsers     = users.length;
+  const verifiedUsers  = users.filter(u => u.verified).length;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ARVL Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #000;
+      --surface: #111;
+      --border:  #222;
+      --text:    #f5f5f5;
+      --muted:   #666;
+    }
+    html.light {
+      --bg:      #ffffff;
+      --surface: #f5f5f5;
+      --border:  #e0e0e0;
+      --text:    #111111;
+      --muted:   #888888;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 2rem 1.5rem 4rem;
+    }
+    .header {
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1.25rem;
+    }
+    .header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -.03em; }
+    .header span { font-size: .8rem; color: var(--muted); }
+    .theme-btn {
+      margin-left: auto;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: .3rem .7rem;
+      font-size: .75rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s;
+    }
+    .theme-btn:hover { background: var(--surface); }
+    .stats {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.5rem;
+    }
+    .stat-value { font-size: 2rem; font-weight: 700; letter-spacing: -.04em; }
+    .stat-label { font-size: .75rem; color: var(--muted); margin-top: .15rem; }
+    section { margin-bottom: 3rem; }
+    section h2 {
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      text-align: left;
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: .5rem .75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: .65rem .75rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      font-size: .85rem;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface); }
+    .badge {
+      display: inline-block;
+      padding: .15rem .5rem;
+      border-radius: 999px;
+      font-size: .7rem;
+      font-weight: 600;
+    }
+    .badge--verified  { background: #1a3a1a; color: #4caf50; }
+    .badge--pending   { background: #2a2010; color: #ff9800; }
+    html.light .badge--verified { background: #e6f4ea; color: #2e7d32; }
+    html.light .badge--pending  { background: #fff3e0; color: #e65100; }
+    .pick-card {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+    .pick-cover {
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      object-fit: cover;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .pick-title { font-weight: 600; font-size: .85rem; }
+    .pick-artist { font-size: .75rem; color: var(--muted); }
+    .note { font-size: .8rem; color: var(--muted); font-style: italic; max-width: 300px; }
+    .week-tag {
+      font-size: .7rem;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: .1rem .4rem;
+    }
+    .category {
+      font-size: .7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+    }
+    .empty { color: var(--muted); font-size: .85rem; padding: 1rem .75rem; }
+    .nav-tabs {
+      display: flex;
+      gap: .5rem;
+      margin-bottom: 2rem;
+    }
+    .tab {
+      padding: .4rem .9rem;
+      border-radius: 6px;
+      font-size: .8rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: inherit;
+      transition: all .15s;
+    }
+    .tab.active, .tab:hover {
+      background: var(--surface);
+      color: var(--text);
+      border-color: var(--text);
+    }
+    .panel { display: none; }
+    .panel.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>ARVL Admin</h1>
+    <span>dashboard</span>
+    <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">Light mode</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">${totalUsers}</div>
+      <div class="stat-label">Total members</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${verifiedUsers}</div>
+      <div class="stat-label">Verified</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${picks.length}</div>
+      <div class="stat-label">Total picks</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${feedback.length}</div>
+      <div class="stat-label">Feedback submissions</div>
+    </div>
+  </div>
+
+  <div class="nav-tabs">
+    <button class="tab active" onclick="showTab('members')">Members</button>
+    <button class="tab" onclick="showTab('picks')">Picks</button>
+    <button class="tab" onclick="showTab('feedback')">Feedback</button>
+  </div>
+
+  <!-- Members -->
+  <div class="panel active" id="panel-members">
+    <section>
+      <h2>Members</h2>
+      ${users.length === 0 ? '<p class="empty">No members yet.</p>' : `
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Status</th>
+            <th>Joined</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map(u => `
+          <tr>
+            <td>${esc(u.username || '—')}</td>
+            <td>${esc(u.email)}</td>
+            <td><span class="badge ${u.verified ? 'badge--verified' : 'badge--pending'}">${u.verified ? 'Verified' : 'Pending'}</span></td>
+            <td>${u.joined}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`}
+    </section>
+  </div>
+
+  <!-- Picks -->
+  <div class="panel" id="panel-picks">
+    <section>
+      <h2>Picks</h2>
+      ${picks.length === 0 ? '<p class="empty">No picks yet.</p>' : `
+      <table>
+        <thead>
+          <tr>
+            <th>Album</th>
+            <th>Picked by</th>
+            <th>Week</th>
+            <th>Note</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${picks.map(p => `
+          <tr>
+            <td>
+              <div class="pick-card">
+                ${p.cover_url ? `<img class="pick-cover" src="${esc(p.cover_url)}" alt="">` : '<div class="pick-cover"></div>'}
+                <div>
+                  <div class="pick-title">${esc(p.title)}</div>
+                  <div class="pick-artist">${esc(p.artist)}</div>
+                </div>
+              </div>
+            </td>
+            <td>${esc(p.username || p.email)}</td>
+            <td><span class="week-tag">${esc(p.week_key)}</span></td>
+            <td><span class="note">${p.note ? esc(p.note) : '—'}</span></td>
+            <td>${p.picked_at}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`}
+    </section>
+  </div>
+
+  <!-- Feedback -->
+  <div class="panel" id="panel-feedback">
+    <section>
+      <h2>Feedback</h2>
+      ${feedback.length === 0 ? '<p class="empty">No feedback yet.</p>' : `
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Type</th>
+            <th>Message</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${feedback.map(f => `
+          <tr>
+            <td>${esc(f.user)}</td>
+            <td><span class="category">${esc(f.category)}</span></td>
+            <td>${esc(f.message)}</td>
+            <td>${f.submitted_at}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`}
+    </section>
+  </div>
+
+  <script>
+    // Theme
+    const html = document.documentElement;
+    const btn  = document.getElementById('theme-btn');
+    if (localStorage.getItem('admin-theme') === 'light') {
+      html.classList.add('light');
+      btn.textContent = 'Dark mode';
+    }
+    function toggleTheme() {
+      const isLight = html.classList.toggle('light');
+      btn.textContent = isLight ? 'Dark mode' : 'Light mode';
+      localStorage.setItem('admin-theme', isLight ? 'light' : 'dark');
+    }
+
+    function showTab(name) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('panel-' + name).classList.add('active');
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>`;
+
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  res.send(html);
+});
+
+module.exports = router;
