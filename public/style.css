@@ -2059,6 +2059,11 @@ input[type="text"]:focus          { border-color: var(--subtle); box-shadow: 0 0
   color: var(--muted);
   margin: 0;
 }
+.privacy-date {
+  font-size: .8rem;
+  color: var(--muted);
+  margin: -.25rem 0 .5rem;
+}
 .about-sig {
   color: var(--text) !important;
   font-style: italic;

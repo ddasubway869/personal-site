@@ -1828,6 +1828,7 @@
       <div class="footer-links">
         <button class="footer-link" id="btn-about">About</button>
         <button class="footer-link" id="btn-feedback">Feedback</button>
+        <button class="footer-link" id="btn-privacy">Privacy</button>
       </div>
     </div>
   </footer>
@@ -1875,9 +1876,27 @@
     </div>
   </div>
 
+  <!-- ── Privacy modal ─────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-privacy" hidden>
+    <div class="modal modal--about" role="dialog" aria-modal="true">
+      <button class="modal-close" data-close="modal-privacy" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <h2 class="modal-title">Privacy Policy</h2>
+      <p class="privacy-date">Last updated: March 7, 2026</p>
+      <div class="about-body">
+        <p><strong>What we collect</strong><br>When you create an account, we collect your email address, username, and a hashed (encrypted) version of your password. We also store the album picks, ratings, and comments you submit.</p>
+        <p><strong>What we don't collect</strong><br>We don't collect your Spotify account data. Spotify is used only to search and display album information — no connection to your personal Spotify account is required or stored.</p>
+        <p><strong>How we use your data</strong><br>Your email is used only to verify your account. We don't send marketing emails, and we never sell or share your data with third parties.</p>
+        <p><strong>Data storage</strong><br>Your data is stored securely on our servers. Passwords are never stored in plain text.</p>
+        <p><strong>Deleting your account</strong><br>Want your data removed? Email us at <a href="mailto:hello@arvl.app" style="color:var(--text)">hello@arvl.app</a> and we'll delete your account and associated data.</p>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ── Close handlers for late-rendered modals ────────────
-    ['modal-about', 'modal-feedback'].forEach(id => {
+    ['modal-about', 'modal-feedback', 'modal-privacy'].forEach(id => {
       const overlay = document.getElementById(id);
       overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(id); });
       overlay.querySelector('[data-close]')?.addEventListener('click', () => closeModal(id));
@@ -1885,6 +1904,7 @@
 
     // ── Footer buttons ─────────────────────────────────────
     document.getElementById('btn-about').addEventListener('click', () => openModal('modal-about'));
+    document.getElementById('btn-privacy').addEventListener('click', () => openModal('modal-privacy'));
     document.getElementById('btn-feedback').addEventListener('click', () => {
       if (!me) { openModal('modal-login'); return; }
       openModal('modal-feedback');
