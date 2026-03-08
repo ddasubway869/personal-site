@@ -22,6 +22,7 @@ async function start() {
 
   const SqliteStore = require('./lib/sessionStore')(session);
 
+  app.set('trust proxy', 1);
   app.use(express.json());
   app.use(session({
     store:             new SqliteStore(),
