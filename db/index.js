@@ -4,8 +4,11 @@ const sqlite3  = require('sqlite3');
 const path     = require('path');
 const fs       = require('fs');
 
-const dataDir = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
+// Use DB_PATH env var if set (for persistent storage outside deploy dir on shared hosting)
+// Otherwise fall back to ./data/app.db
+const dbFile = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'app.db');
+const dataDir = path.dirname(dbFile);
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 let _db;
 
@@ -13,7 +16,7 @@ async function getDb() {
   if (_db) return _db;
 
   _db = await open({
-    filename: path.join(dataDir, 'app.db'),
+    filename: dbFile,
     driver:   sqlite3.Database,
   });
 
