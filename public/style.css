@@ -6,14 +6,14 @@
 /* ── CSS Variables — Dark (default) ────────────────────── */
 :root,
 html.dark {
-  --bg:         #111110;
-  --surface:    #1c1c1b;
-  --border:     #2e2e2c;
+  --bg:         #000000;
+  --surface:    #111111;
+  --border:     #222222;
   --text:       #f0f0ee;
   --muted:      #7a7a72;
   --subtle:     #a0a099;
   --btn-bg:     #f0f0ee;
-  --btn-text:   #111110;
+  --btn-text:   #000000;
   --btn-hover:  #ffffff;
   --focus-ring: rgba(240,240,238,.16);
   --shadow:     0 1px 4px rgba(0,0,0,.5), 0 8px 28px rgba(0,0,0,.55);
@@ -63,7 +63,7 @@ body {
 /* ── Header ─────────────────────────────────────────────── */
 .site-header {
   position: fixed;
-  top: 0; left: 0; right: 0;
+  top: 10px; left: 0; right: 0;
   z-index: 100;
   height: var(--header-h);
   background: var(--bg);
@@ -72,7 +72,7 @@ body {
 .header-inner {
   max-width: 100%;
   margin: 0 auto;
-  padding: 0 2.5rem;
+  padding: 0 1.25rem;
   height: 100%;
   display: flex;
   align-items: center;
@@ -129,7 +129,7 @@ body {
   border-radius: 50%;
   border: none;
   background: transparent;
-  color: var(--muted);
+  color: var(--text);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -147,7 +147,7 @@ body {
   font-family: inherit;
   font-size: 1rem;
   font-weight: 400;
-  color: var(--muted);
+  color: var(--text);
   cursor: pointer;
   white-space: nowrap;
   transition: color .15s;
