@@ -1,7 +1,8 @@
 'use strict';
-const express   = require('express');
-const router    = express.Router();
-const { getDb } = require('../db');
+const express     = require('express');
+const router      = express.Router();
+const { getDb }   = require('../db');
+const scheduler   = require('../lib/scheduler');
 
 function requireSecret(req, res, next) {
   if (req.query.secret !== process.env.SESSION_SECRET) {
@@ -23,6 +24,7 @@ router.get('/dashboard', requireSecret, async (req, res) => {
     db.all(`
       SELECT u.username, u.email,
              al.title, al.artist, al.cover_url,
+
              r.week_key, r.note,
              datetime(r.created_at, 'unixepoch') AS picked_at
       FROM   recommendations r
@@ -41,7 +43,7 @@ router.get('/dashboard', requireSecret, async (req, res) => {
     `),
   ]);
 
-  const secret = req.query.secret;
+const secret = req.query.secret;
   const totalUsers     = users.length;
   const verifiedUsers  = users.filter(u => u.verified).length;
 
@@ -281,6 +283,7 @@ router.get('/dashboard', requireSecret, async (req, res) => {
             <th>Album</th>
             <th>Picked by</th>
             <th>Week</th>
+
             <th>Note</th>
             <th>Date</th>
           </tr>
@@ -299,6 +302,7 @@ router.get('/dashboard', requireSecret, async (req, res) => {
             </td>
             <td>${esc(p.username || p.email)}</td>
             <td><span class="week-tag">${esc(p.week_key)}</span></td>
+
             <td><span class="note">${p.note ? esc(p.note) : '—'}</span></td>
             <td>${p.picked_at}</td>
           </tr>`).join('')}
@@ -367,6 +371,62 @@ router.get('/dashboard', requireSecret, async (req, res) => {
   }
 
   res.send(html);
+});
+
+// ── GET /admin/test-email ─────────────────────────────────
+// ?secret=...&type=opener|nudge&to=email@example.com
+// If `to` is provided, sends directly to that address (test mode).
+// Otherwise fires to all eligible recipients.
+router.get('/test-email', requireSecret, async (req, res) => {
+  const { type, to } = req.query;
+  if (!type || !['opener', 'nudge'].includes(type)) {
+    return res.status(400).json({ error: 'type must be opener or nudge' });
+  }
+
+  if (to) {
+    const mailer   = require('../lib/mailer');
+    const { buildEmail, isoWeekKey, weekNumber } = scheduler;
+    const weekKey  = isoWeekKey();
+    const weekNum  = weekNumber(weekKey);
+    const BASE_URL = process.env.BASE_URL || 'https://arvl.app';
+    const name     = req.query.username || 'there';
+    const theme    = req.query.theme || 'dark';
+
+    const subject = type === 'opener' ? 'A new week is open' : "You haven't picked yet";
+    const html    = type === 'opener'
+      ? buildEmail({
+          eyebrow:  'Weekly pick',
+          heading:  `Week ${weekNum} is open.`,
+          body:     `What are you listening to this week, ${name}? Submit your pick and see what the community is into.`,
+          ctaLabel: 'Submit your pick',
+          theme,
+        })
+      : buildEmail({
+          eyebrow:  'Reminder',
+          heading:  "The week's still open.",
+          body:     `Hey ${name}, you haven't submitted your pick for Week ${weekNum} yet. What's been on repeat? And if you need some inspiration, check out what the community is already recommending this week.`,
+          ctaLabel: 'Submit your pick',
+          theme,
+        });
+
+    try {
+      await mailer.sendMail({
+        from:    `"ARVL" <${process.env.MAIL_FROM}>`,
+        to,
+        subject,
+        text:    subject,
+        html,
+      });
+      return res.json({ ok: true, sent: type, to });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // No `to` — fire to all eligible recipients
+  if (type === 'opener') scheduler.sendWeeklyOpener().catch(console.error);
+  if (type === 'nudge')  scheduler.sendNudge().catch(console.error);
+  res.json({ ok: true, sent: type, to: 'all eligible members' });
 });
 
 module.exports = router;

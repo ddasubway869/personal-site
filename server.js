@@ -14,6 +14,7 @@ const artistRoutes         = require('./routes/artists');
 const playerRoutes         = require('./routes/player');
 const feedbackRoutes       = require('./routes/feedback');
 const adminRoutes          = require('./routes/admin');
+const scheduler            = require('./lib/scheduler');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -77,6 +78,8 @@ async function start() {
   app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
   });
+
+  scheduler.start();
 }
 
 start().catch(err => {
