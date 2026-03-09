@@ -14,7 +14,7 @@ function requireSecret(req, res, next) {
 router.get('/dashboard', requireSecret, async (req, res) => {
   const db = await getDb();
 
-  const [users, picks, feedback] = await Promise.all([
+  const [users, picks, feedback, emailLogs] = await Promise.all([
     db.all(`
       SELECT username, email, verified,
              datetime(created_at, 'unixepoch') AS joined
@@ -40,6 +40,13 @@ router.get('/dashboard', requireSecret, async (req, res) => {
       FROM   feedback f
       LEFT JOIN users u ON u.id = f.user_id
       ORDER  BY f.created_at DESC
+    `),
+    db.all(`
+      SELECT type, recipient, status,
+             datetime(sent_at, 'unixepoch') AS sent_at
+      FROM   email_logs
+      ORDER  BY sent_at DESC
+      LIMIT  200
     `),
   ]);
 
@@ -153,8 +160,12 @@ const secret = req.query.secret;
     }
     .badge--verified  { background: #1a3a1a; color: #4caf50; }
     .badge--pending   { background: #2a2010; color: #ff9800; }
+    .badge--sent      { background: #1a2a3a; color: #64b5f6; }
+    .badge--failed    { background: #3a1a1a; color: #ef5350; }
     html.light .badge--verified { background: #e6f4ea; color: #2e7d32; }
     html.light .badge--pending  { background: #fff3e0; color: #e65100; }
+    html.light .badge--sent     { background: #e3f2fd; color: #1565c0; }
+    html.light .badge--failed   { background: #fce4ec; color: #c62828; }
     .pick-card {
       display: flex;
       align-items: center;
@@ -243,6 +254,7 @@ const secret = req.query.secret;
     <button class="tab active" onclick="showTab('members')">Members</button>
     <button class="tab" onclick="showTab('picks')">Picks</button>
     <button class="tab" onclick="showTab('feedback')">Feedback</button>
+    <button class="tab" onclick="showTab('emails')">Emails</button>
   </div>
 
   <!-- Members -->
@@ -332,6 +344,33 @@ const secret = req.query.secret;
             <td><span class="category">${esc(f.category)}</span></td>
             <td>${esc(f.message)}</td>
             <td>${f.submitted_at}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`}
+    </section>
+  </div>
+
+  <!-- Emails -->
+  <div class="panel" id="panel-emails">
+    <section>
+      <h2>Email Log</h2>
+      ${emailLogs.length === 0 ? '<p class="empty">No emails sent yet.</p>' : `
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Recipient</th>
+            <th>Status</th>
+            <th>Sent at</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${emailLogs.map(e => `
+          <tr>
+            <td><span class="category">${esc(e.type)}</span></td>
+            <td>${esc(e.recipient)}</td>
+            <td><span class="badge badge--${esc(e.status)}">${esc(e.status)}</span></td>
+            <td>${e.sent_at}</td>
           </tr>`).join('')}
         </tbody>
       </table>`}

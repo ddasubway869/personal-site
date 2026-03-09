@@ -105,6 +105,15 @@ async function getDb() {
       message    TEXT    NOT NULL CHECK(length(message) <= 2000),
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    -- Log of all outbound emails sent by the scheduler
+    CREATE TABLE IF NOT EXISTS email_logs (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      type       TEXT    NOT NULL,
+      recipient  TEXT    NOT NULL,
+      status     TEXT    NOT NULL DEFAULT 'sent',
+      sent_at    INTEGER NOT NULL DEFAULT (unixepoch())
+    );
   `);
 
   // ── Migrations (safe to re-run; errors ignored if column exists) ──
