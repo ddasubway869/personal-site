@@ -71,17 +71,72 @@ function isoWeekKey(date = new Date()) {
   return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
 }
 
+// How long a cached album detail is considered fresh (7 days, in seconds)
+const DETAIL_CACHE_TTL_S = 7 * 24 * 60 * 60;
+
 // ── GET /albums/:spotifyId ────────────────────────────────
-// Returns album metadata + tracks from Spotify, plus this week's pick count.
+// Returns album metadata + tracks. Serves from DB cache when available so the
+// panel still works even when Spotify is rate-limited.
 router.get('/:spotifyId', async (req, res) => {
   const { spotifyId } = req.params;
 
   try {
-    // Phase 1 — Spotify album + DB (artist/title needed before phase 2)
-    const [albumData, db] = await Promise.all([getAlbum(spotifyId), getDb()]);
+    const db      = await getDb();
     const weekKey = isoWeekKey();
 
-    // Phase 2 — all derived lookups run in parallel
+    // ── Phase 1: try DB cache first ──────────────────────
+    const dbRow = await db.get(
+      `SELECT title, artist, cover_url, release_year, tracks_json, artists_json
+       FROM   albums
+       WHERE  spotify_id = ?
+         AND  tracks_json IS NOT NULL
+         AND  detail_cached_at > unixepoch() - ?`,
+      spotifyId, DETAIL_CACHE_TTL_S
+    );
+
+    let albumData;
+    let fromCache = false;
+
+    if (dbRow) {
+      // Serve from DB — no Spotify call needed
+      albumData = {
+        spotifyId,
+        title:       dbRow.title,
+        artist:      dbRow.artist,
+        artists:     JSON.parse(dbRow.artists_json || '[]'),
+        coverUrl:    dbRow.cover_url,
+        releaseYear: dbRow.release_year,
+        tracks:      JSON.parse(dbRow.tracks_json),
+      };
+      fromCache = true;
+    } else {
+      // Fetch from Spotify and cache the result
+      albumData = await getAlbum(spotifyId);
+
+      db.run(
+        `INSERT INTO albums
+           (spotify_id, title, artist, cover_url, release_year,
+            tracks_json, artists_json, detail_cached_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch())
+         ON CONFLICT(spotify_id) DO UPDATE
+           SET title            = excluded.title,
+               artist           = excluded.artist,
+               cover_url        = excluded.cover_url,
+               release_year     = excluded.release_year,
+               tracks_json      = excluded.tracks_json,
+               artists_json     = excluded.artists_json,
+               detail_cached_at = excluded.detail_cached_at`,
+        spotifyId,
+        albumData.title,
+        albumData.artist,
+        albumData.coverUrl,
+        albumData.releaseYear,
+        JSON.stringify(albumData.tracks),
+        JSON.stringify(albumData.artists ?? []),
+      ).catch(() => {});
+    }
+
+    // ── Phase 2 — all derived lookups run in parallel ────
     const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes] = await Promise.all([
       db.get(
         `SELECT COUNT(r.id) AS count
@@ -110,22 +165,6 @@ router.get('/:spotifyId', async (req, res) => {
     const description       = albumDesc || artistBio || null;
     const descriptionSource = albumDesc ? 'album' : (artistBio ? 'artist' : null);
 
-    // Silently refresh the cached DB row (if it exists) with the latest Spotify data.
-    // This keeps release_year / cover_url up-to-date without blocking the response.
-    db.run(
-      `UPDATE albums
-       SET title        = ?,
-           artist       = ?,
-           cover_url    = ?,
-           release_year = ?
-       WHERE spotify_id = ?`,
-      albumData.title,
-      albumData.artist,
-      albumData.coverUrl,
-      albumData.releaseYear,
-      spotifyId
-    ).catch(() => {});
-
     res.json({
       album:             albumData,
       tracks:            albumData.tracks,
@@ -134,6 +173,7 @@ router.get('/:spotifyId', async (req, res) => {
       description,
       descriptionSource,
       pickNotes,
+      _cached:           fromCache,
     });
   } catch (err) {
     console.error('Album fetch error:', err.message);

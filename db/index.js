@@ -127,6 +127,10 @@ async function getDb() {
     'ALTER TABLE users ADD COLUMN username TEXT',
     // Optional "tell us why" note attached to a weekly recommendation
     'ALTER TABLE recommendations ADD COLUMN note TEXT',
+    // Album detail cache — full track list + artists array from Spotify
+    'ALTER TABLE albums ADD COLUMN tracks_json TEXT',
+    'ALTER TABLE albums ADD COLUMN artists_json TEXT',
+    'ALTER TABLE albums ADD COLUMN detail_cached_at INTEGER',
   ]) {
     try { await _db.run(stmt); } catch { /* column already exists */ }
   }
