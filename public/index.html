@@ -1105,7 +1105,7 @@
         const r = await fetch(`/search?q=${encodeURIComponent(q)}`);
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Search failed');
-        renderSearchPanel(d.artists ?? [], d.albums ?? []);
+        renderSearchPanel(d.artists ?? [], d.albums ?? [], !!d._fallback);
       } catch {
         body.innerHTML = '<p class="sp-loading">Search failed. Try again.</p>';
       }
@@ -1146,7 +1146,24 @@
       return row;
     }
 
-    function renderSearchPanel(artists, albums) {
+    async function resolveAndOpenDeezerAlbum(album) {
+      const body = document.getElementById('sp-body');
+      body.innerHTML = '<p class="sp-loading">Loading…</p>';
+      try {
+        const r = await fetch(`/search?q=${encodeURIComponent(album.title + ' ' + album.artist)}`);
+        const d = await r.json();
+        const match = (d.albums ?? []).find(a => !a._deezer);
+        if (match) {
+          openAlbumPanel(match.spotifyId, match);
+        } else {
+          body.innerHTML = '<p class="sp-loading">Album unavailable right now. Try searching again shortly.</p>';
+        }
+      } catch {
+        body.innerHTML = '<p class="sp-loading">Search failed. Try again.</p>';
+      }
+    }
+
+    function renderSearchPanel(artists, albums, isFallback = false) {
       const body = document.getElementById('sp-body');
       if (!artists.length && !albums.length) {
         body.innerHTML = '<p class="sp-loading">No results found.</p>';
@@ -1154,8 +1171,16 @@
       }
       const container = document.createElement('div');
 
-      // ── Artists section
-      if (artists.length) {
+      // ── Fallback notice
+      if (isFallback) {
+        const notice = document.createElement('p');
+        notice.className = 'sp-fallback-notice';
+        notice.textContent = 'Spotify is busy — showing alternative results';
+        container.appendChild(notice);
+      }
+
+      // ── Artists section (only for Spotify results)
+      if (artists.length && !isFallback) {
         const lbl = document.createElement('p');
         lbl.className = 'sp-section-label';
         lbl.textContent = 'Artists';
@@ -1191,7 +1216,10 @@
         const list = document.createElement('div');
         list.className = 'sp-list';
         albums.forEach(album => {
-          list.appendChild(makeAlbumListRow(album, () => openAlbumPanel(album.spotifyId, album)));
+          const onClick = album._deezer
+            ? () => resolveAndOpenDeezerAlbum(album)
+            : () => openAlbumPanel(album.spotifyId, album);
+          list.appendChild(makeAlbumListRow(album, onClick));
         });
         container.appendChild(list);
       }

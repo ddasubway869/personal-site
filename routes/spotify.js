@@ -1,6 +1,7 @@
 'use strict';
 const express               = require('express');
 const { search, getToken }  = require('../lib/spotify');
+const deezer                = require('../lib/deezer');
 
 const router = express.Router();
 
@@ -13,8 +14,15 @@ router.get('/', async (req, res) => {
     const { artists, albums } = await search(q);
     res.json({ artists, albums });
   } catch (err) {
-    console.error('Spotify search error:', err.message);
-    res.status(502).json({ error: 'Could not reach Spotify. Try again.' });
+    // Spotify failed (rate limit or other error) — try Deezer as fallback
+    console.warn(`Spotify search failed (${err.message}), falling back to Deezer`);
+    try {
+      const result = await deezer.search(q);
+      res.json({ ...result, _fallback: true });
+    } catch (dzErr) {
+      console.error('Deezer fallback also failed:', dzErr.message);
+      res.status(502).json({ error: 'Could not reach Spotify. Try again.' });
+    }
   }
 });
 

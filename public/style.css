@@ -951,6 +951,13 @@ html.light .icon-moon { display: block; }
   text-align: center;
   padding: 2rem 1rem;
 }
+.sp-fallback-notice {
+  font-size: .75rem;
+  color: var(--muted);
+  text-align: center;
+  padding: .5rem 1rem .25rem;
+  opacity: .7;
+}
 
 /* ── Search panel list ───────────────────────────────────── */
 .sp-list { display: flex; flex-direction: column; }
