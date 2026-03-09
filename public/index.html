@@ -1146,21 +1146,9 @@
       return row;
     }
 
-    async function resolveAndOpenDeezerAlbum(album) {
-      const body = document.getElementById('sp-body');
-      body.innerHTML = '<p class="sp-loading">Loading…</p>';
-      try {
-        const r = await fetch(`/search?q=${encodeURIComponent(album.title + ' ' + album.artist)}`);
-        const d = await r.json();
-        const match = (d.albums ?? []).find(a => !a._deezer);
-        if (match) {
-          openAlbumPanel(match.spotifyId, match);
-        } else {
-          body.innerHTML = '<p class="sp-loading">Album unavailable right now. Try searching again shortly.</p>';
-        }
-      } catch {
-        body.innerHTML = '<p class="sp-loading">Search failed. Try again.</p>';
-      }
+    // Deezer albums now load directly from the dz_ backend endpoint
+    function resolveAndOpenDeezerAlbum(album) {
+      openAlbumPanel(album.spotifyId, album);
     }
 
     function renderSearchPanel(artists, albums, isFallback = false) {
@@ -1470,11 +1458,17 @@
       // Close button
       document.getElementById('ap-close-btn').addEventListener('click', closeAlbumPanel);
 
-      // Artist name links
+      // Artist name links (skip if no Spotify artist ID, e.g. Deezer albums)
       inner.querySelectorAll('.ap-artist-link').forEach(btn => {
+        const artistId = btn.dataset.artistId;
+        if (!artistId || artistId === 'null') {
+          btn.style.cursor = 'default';
+          btn.style.textDecoration = 'none';
+          return;
+        }
         btn.addEventListener('click', () => {
           closeAlbumPanel();
-          openArtistPanel(btn.dataset.artistId, { name: btn.dataset.artistName });
+          openArtistPanel(artistId, { name: btn.dataset.artistName });
         });
       });
 

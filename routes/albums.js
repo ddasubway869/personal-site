@@ -74,11 +74,89 @@ function isoWeekKey(date = new Date()) {
 // How long a cached album detail is considered fresh (7 days, in seconds)
 const DETAIL_CACHE_TTL_S = 7 * 24 * 60 * 60;
 
+// ── Deezer album fetcher — used when spotifyId starts with "dz_" ──────────
+async function fetchDeezerAlbum(deezerId) {
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 6000);
+  try {
+    const r = await fetch(`https://api.deezer.com/album/${encodeURIComponent(deezerId)}`, { signal: ac.signal });
+    clearTimeout(tid);
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (data.error) return null;
+
+    return {
+      spotifyId:   `dz_${deezerId}`,
+      title:       data.title        ?? '',
+      artist:      data.artist?.name ?? '',
+      artists:     [{ id: null, name: data.artist?.name ?? '' }],
+      coverUrl:    data.cover_medium || data.cover || null,
+      releaseYear: data.release_date ? String(data.release_date).slice(0, 4) : null,
+      tracks: (data.tracks?.data ?? []).map((t, i) => ({
+        id:          String(t.id),
+        name:        t.title         ?? '',
+        trackNumber: t.track_position || (i + 1),
+        durationMs:  (t.duration || 0) * 1000,
+        previewUrl:  t.preview        || null,
+        artist:      t.artist?.name   || data.artist?.name || '',
+      })),
+      _deezer: true,
+    };
+  } catch {
+    clearTimeout(tid);
+    return null;
+  }
+}
+
 // ── GET /albums/:spotifyId ────────────────────────────────
 // Returns album metadata + tracks. Serves from DB cache when available so the
 // panel still works even when Spotify is rate-limited.
+// Also handles dz_ prefixed IDs (Deezer fallback) when Spotify is unavailable.
 router.get('/:spotifyId', async (req, res) => {
   const { spotifyId } = req.params;
+
+  // ── Deezer album path (dz_ prefix) ───────────────────────────────────────
+  if (spotifyId.startsWith('dz_')) {
+    try {
+      const deezerId   = spotifyId.slice(3);
+      const [albumData, db] = await Promise.all([fetchDeezerAlbum(deezerId), getDb()]);
+      if (!albumData) return res.status(502).json({ error: 'Could not load album from Deezer.' });
+
+      const weekKey = isoWeekKey();
+      const [pickRow, albumDesc, artistBio, pickNotes] = await Promise.all([
+        db.get(
+          `SELECT COUNT(r.id) AS count FROM recommendations r JOIN albums a ON a.id = r.album_id WHERE a.spotify_id = ? AND r.week_key = ?`,
+          spotifyId, weekKey
+        ),
+        getAlbumDescription(albumData.artist, albumData.title),
+        getArtistBio(albumData.artist),
+        db.all(
+          `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username, r.note
+           FROM   recommendations r JOIN users u ON u.id = r.user_id JOIN albums a ON a.id = r.album_id
+           WHERE  a.spotify_id = ? AND r.note IS NOT NULL AND trim(r.note) != ''
+           ORDER  BY r.created_at DESC LIMIT 6`,
+          spotifyId
+        ),
+      ]);
+
+      const description       = albumDesc || artistBio || null;
+      const descriptionSource = albumDesc ? 'album' : (artistBio ? 'artist' : null);
+
+      return res.json({
+        album:             albumData,
+        tracks:            albumData.tracks,
+        weekPickCount:     pickRow?.count ?? 0,
+        appleMusicUrl:     null,
+        description,
+        descriptionSource,
+        pickNotes,
+        _deezer:           true,
+      });
+    } catch (err) {
+      console.error('Deezer album fetch error:', err.message);
+      return res.status(502).json({ error: 'Could not load album from Deezer.' });
+    }
+  }
 
   try {
     const db      = await getDb();

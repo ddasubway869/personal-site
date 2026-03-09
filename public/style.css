@@ -881,7 +881,7 @@ html.light .icon-moon { display: block; }
   background: var(--bg);
   border-left: 1px solid var(--border);
   z-index: 140;
-  overflow-y: auto;
+  overflow: hidden;
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   display: flex;
@@ -904,7 +904,8 @@ html.light .icon-moon { display: block; }
   .search-panel.sp-open { transform: translateY(0); }
 }
 
-.sp-inner { display: flex; flex-direction: column; min-height: 100%; }
+/* sp-inner stretches to fill the panel; no overflow here */
+.sp-inner { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 /* ── Search panel header ─────────────────────────────────── */
 .sp-header {
@@ -913,10 +914,8 @@ html.light .icon-moon { display: block; }
   gap: .75rem;
   padding: .875rem 1rem;
   border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   background: var(--bg);
-  z-index: 1;
 }
 
 .sp-back-btn {
@@ -942,8 +941,8 @@ html.light .icon-moon { display: block; }
   text-overflow: ellipsis;
 }
 
-/* ── Search panel body ───────────────────────────────────── */
-.sp-body { padding: .5rem 1rem 1rem; flex: 1; }
+/* ── Search panel body — this is the scroll container ───── */
+.sp-body { padding: .5rem 1rem 1rem; flex: 1; min-height: 0; overflow-y: auto; }
 
 .sp-loading {
   font-size: .875rem;
@@ -1100,7 +1099,7 @@ html.light .icon-moon { display: block; }
   background: var(--bg);
   border-left: 1px solid var(--border);
   z-index: 160;
-  overflow-y: auto;
+  overflow: hidden;
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   display: flex;
@@ -1123,8 +1122,8 @@ html.light .icon-moon { display: block; }
   .album-panel.ap-open { transform: translateY(0); }
 }
 
-/* ── Panel inner structure ───────────────────────────────── */
-.ap-inner { display: flex; flex-direction: column; min-height: 100%; }
+/* ── Panel inner structure — ap-inner is the scroll container */
+.ap-inner { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; }
 
 .ap-header {
   display: flex;
