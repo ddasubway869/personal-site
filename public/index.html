@@ -393,7 +393,7 @@
 
     // Play helper — automatically retries with a device_id if Spotify
     // returns 404 (open but idle, no "active" device).
-    async function spotifyPlay(body = {}) {
+    async function spotifyPlay(body = {}, { silent = false } = {}) {
       const doPlay = async (deviceId) => {
         const url = deviceId ? `/player/play?device_id=${encodeURIComponent(deviceId)}` : '/player/play';
         return fetch(url, {
@@ -417,7 +417,7 @@
         }
       }
 
-      if (!data.ok) {
+      if (!data.ok && !silent) {
         showToast('Open Spotify on any device first', 'err');
       }
       return data;
@@ -1001,7 +1001,7 @@
 
     _audio.addEventListener('ended', () => {
       _playingTrackId = null;
-      document.querySelectorAll('.track-play').forEach(b => b.innerHTML = playIcon());
+      document.querySelectorAll('.track-play-btn').forEach(b => b.innerHTML = playIcon());
     });
 
     function playIcon()  { return '<svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><polygon points="5,3 19,12 5,21"/></svg>'; }
@@ -1351,7 +1351,7 @@
       // Track rows with per-track star ratings
       const trackRows = tracks.map(t => `
         <div class="track-row">
-          <button class="track-play-btn" data-track-id="${esc(t.id)}" aria-label="Play ${esc(t.name)}">▶</button>
+          <button class="track-play-btn" data-track-id="${esc(t.id)}" ${t.previewUrl ? `data-preview-url="${esc(t.previewUrl)}"` : ''} aria-label="Play ${esc(t.name)}">▶</button>
           <span class="track-num">${t.trackNumber}</span>
           <div class="track-info">
             <span class="track-name">${esc(t.name)}</span>
@@ -1609,20 +1609,33 @@
       inner.querySelectorAll('.track-play-btn').forEach(btn => {
         btn.addEventListener('click', async e => {
           e.stopPropagation();
-          const trackId = btn.dataset.trackId;
+          const trackId    = btn.dataset.trackId;
+          const previewUrl = btn.dataset.previewUrl || null;
 
-          // If Spotify is connected via OAuth, control playback directly.
-          // Use context_uri (album) + offset (track) so Next/Prev navigate the full album.
-          if (spotifyConnected) {
-            await spotifyPlay({
-              context_uri: `spotify:album:${album.spotifyId}`,
-              offset:      { uri: `spotify:track:${trackId}` },
-            });
-            setTimeout(syncPlayerState, 600);
+          // Deezer albums: no Spotify IDs — play 30-sec preview directly
+          if (album._deezer) {
+            if (previewUrl) {
+              playTrack(previewUrl, trackId);
+            } else {
+              showToast('No preview available for this track', 'info');
+            }
             return;
           }
 
-          // Otherwise fall back to opening Spotify externally
+          // Spotify albums with OAuth: try Spotify Connect playback
+          if (spotifyConnected) {
+            const result = await spotifyPlay({
+              context_uri: `spotify:album:${album.spotifyId}`,
+              offset:      { uri: `spotify:track:${trackId}` },
+            }, { silent: true });
+            if (result.ok) {
+              setTimeout(syncPlayerState, 600);
+              return;
+            }
+            // Playback failed (no active device) — fall through to external link
+          }
+
+          // Open in Spotify externally
           const savedMode = sessionStorage.getItem('spotifyPlayMode');
           if (savedMode) {
             openSpotify(trackId, savedMode);
@@ -1719,7 +1732,7 @@
     }
 
     function updatePlayButtons(activeTrackId, isPlaying) {
-      document.querySelectorAll('.track-play').forEach(btn => {
+      document.querySelectorAll('.track-play-btn').forEach(btn => {
         const isThis = btn.dataset.trackId === activeTrackId;
         btn.innerHTML = (isThis && isPlaying) ? pauseIcon() : playIcon();
       });
