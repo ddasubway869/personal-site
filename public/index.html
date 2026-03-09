@@ -1104,6 +1104,7 @@
       try {
         const r = await fetch(`/search?q=${encodeURIComponent(q)}`);
         const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Search failed');
         renderSearchPanel(d.artists ?? [], d.albums ?? []);
       } catch {
         body.innerHTML = '<p class="sp-loading">Search failed. Try again.</p>';
