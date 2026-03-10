@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ARVL</title>
-  <link rel="stylesheet" href="style.css?v=49" />
+  <link rel="stylesheet" href="style.css?v=51" />
 </head>
 <body>
 
@@ -1392,12 +1392,12 @@
           <button class="ap-close-btn" id="ap-close-btn" aria-label="Back">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
           </button>
-          <div class="ap-header-info">
-            ${album.coverUrl ? `<img class="ap-cover-sm" src="${esc(album.coverUrl)}" alt="">` : ''}
-            <div class="ap-header-text">
-              <h2 class="ap-album-title">${esc(album.title)}${album.releaseYear ? `<span class="ap-header-year"> · ${esc(album.releaseYear)}</span>` : ''}</h2>
-              <p class="ap-header-artist">${artistLinks}</p>
-            </div>
+        </div>
+        <div class="ap-hero">
+          ${album.coverUrl ? `<div class="ap-cover" style="background-image:url('${esc(album.coverUrl)}')"></div>` : ''}
+          <div class="ap-meta">
+            <h2 class="ap-title">${esc(album.title)}${album.releaseYear ? `<span class="ap-header-year"> · ${esc(album.releaseYear)}</span>` : ''}</h2>
+            <p class="ap-artist">${artistLinks}</p>
             <div class="ap-header-score" id="ap-header-score" hidden>
               <span class="ap-score-val" id="ap-score-val"></span>
               <span class="ap-score-label" id="ap-score-label">/ 5</span>
@@ -1477,6 +1477,44 @@
 
       // Close button
       document.getElementById('ap-close-btn').addEventListener('click', closeAlbumPanel);
+
+      // Fade everything in: sections first, then tracks stagger, then glow
+      const SECTION_DUR  = 380; // ms for hero / actions / tabs
+      const TRACK_DELAY  = 70;  // ms stagger between tracks
+      const TRACK_DUR    = 340; // ms per track fade
+
+      // 1. Sections drift in (hero → action bar → tabs, 110ms apart)
+      const sections = [
+        inner.querySelector('.ap-hero'),
+        inner.querySelector('.ap-action-bar'),
+        inner.querySelector('.ap-tabs'),
+      ].filter(Boolean);
+      sections.forEach((el, i) => {
+        el.style.opacity = '0';
+        el.style.animation = `track-fade-in ${SECTION_DUR}ms ease-out forwards`;
+        el.style.animationDelay = `${i * 110}ms`;
+      });
+
+      // 2. Track rows stagger in after sections
+      const TRACK_OFFSET = sections.length * 110 + SECTION_DUR * 0.5;
+      const domTrackRows = [...inner.querySelectorAll('.track-row')];
+      domTrackRows.forEach((row, i) => {
+        row.style.opacity = '0';
+        row.style.animation = `track-fade-in ${TRACK_DUR}ms ease-out forwards`;
+        row.style.animationDelay = `${TRACK_OFFSET + i * TRACK_DELAY}ms`;
+      });
+
+      // 3. Glow Recommend twice after last track
+      if (!isPick) {
+        const pickBtn = inner.querySelector('.ap-pick-btn');
+        const glowDelay = TRACK_OFFSET + domTrackRows.length * TRACK_DELAY + TRACK_DUR + 150;
+        if (pickBtn) {
+          setTimeout(() => {
+            pickBtn.style.animation = 'pick-pulse 1s ease-out 2';
+            pickBtn.addEventListener('animationend', () => { pickBtn.style.animation = ''; }, { once: true });
+          }, glowDelay);
+        }
+      }
 
       // Artist name links (skip if no Spotify artist ID, e.g. Deezer albums)
       inner.querySelectorAll('.ap-artist-link').forEach(btn => {
