@@ -69,6 +69,21 @@ body {
   background: var(--bg);
   transform: translateZ(0); /* promote to own GPU layer — prevents Safari compositing-order bugs */
 }
+.site-header::before {
+  content: '';
+  position: absolute;
+  top: -10px; left: 0; right: 0;
+  height: 10px;
+  background: var(--bg);
+}
+.site-header::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  height: 24px;
+  background: linear-gradient(to bottom, var(--bg), transparent);
+  pointer-events: none;
+}
 
 .header-inner {
   max-width: 100%;
