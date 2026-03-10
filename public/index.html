@@ -461,6 +461,12 @@
 
       // Show stars only when logged in
       document.getElementById('mp-stars').style.display = me ? 'flex' : 'none';
+
+      // Keep track-play-btn icons in the open album panel in sync with Spotify state
+      document.querySelectorAll('.track-play-btn[data-track-id]').forEach(btn => {
+        const isPlaying = d.is_playing && btn.dataset.trackId === d.item.id;
+        btn.innerHTML = isPlaying ? pauseIcon() : playIcon();
+      });
     }
 
     async function fetchMpRatings() {
@@ -1628,6 +1634,7 @@
             }, { silent: true });
             if (result.ok) {
               setTimeout(syncPlayerState, 600);
+              setTimeout(syncPlayerState, 1500); // second poll — Spotify API sometimes needs more time
               return;
             }
             // Playback failed (no active device) — fall through to external link
