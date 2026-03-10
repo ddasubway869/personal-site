@@ -1350,6 +1350,21 @@
       const inner  = document.getElementById('ap-inner');
       const isPick = album.spotifyId === myPickId;
 
+      // Deezer albums: when Spotify is connected, resolve to real Spotify album ID
+      // in the background so track buttons can use Spotify Connect instead of 30-sec previews.
+      if (album._deezer && spotifyConnected && !album._resolvedSpotifyId) {
+        fetch(`/search?q=${encodeURIComponent(album.title + ' ' + album.artist)}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data._fallback || !data.albums?.length) return;
+            const match = data.albums.find(a =>
+              a.title.toLowerCase().trim() === album.title.toLowerCase().trim()
+            );
+            if (match?.spotifyId) album._resolvedSpotifyId = match.spotifyId;
+          })
+          .catch(() => {});
+      }
+
       const artistLinks = album.artists && album.artists.length
         ? album.artists.map(a => `<button class="ap-artist-link" data-artist-id="${esc(a.id)}" data-artist-name="${esc(a.name)}">${esc(a.name)}</button>`).join(', ')
         : esc(album.artist);
@@ -1357,7 +1372,7 @@
       // Track rows with per-track star ratings
       const trackRows = tracks.map(t => `
         <div class="track-row">
-          <button class="track-play-btn" data-track-id="${esc(t.id)}" ${t.previewUrl ? `data-preview-url="${esc(t.previewUrl)}"` : ''} aria-label="Play ${esc(t.name)}">▶</button>
+          <button class="track-play-btn" data-track-id="${esc(t.id)}" data-track-number="${t.trackNumber}" ${t.previewUrl ? `data-preview-url="${esc(t.previewUrl)}"` : ''} aria-label="Play ${esc(t.name)}">▶</button>
           <span class="track-num">${t.trackNumber}</span>
           <div class="track-info">
             <span class="track-name">${esc(t.name)}</span>
@@ -1616,8 +1631,20 @@
           const trackId    = btn.dataset.trackId;
           const previewUrl = btn.dataset.previewUrl || null;
 
-          // Deezer albums: no Spotify IDs — play 30-sec preview directly
+          // Deezer albums: try Spotify Connect first (if resolved), then fall back to preview
           if (album._deezer) {
+            if (spotifyConnected && album._resolvedSpotifyId) {
+              const trackNum = parseInt(btn.dataset.trackNumber || '1', 10);
+              const result = await spotifyPlay({
+                context_uri: `spotify:album:${album._resolvedSpotifyId}`,
+                offset:      { position: trackNum - 1 },
+              }, { silent: true });
+              if (result.ok) {
+                setTimeout(syncPlayerState, 600);
+                setTimeout(syncPlayerState, 1500);
+                return;
+              }
+            }
             if (previewUrl) {
               playTrack(previewUrl, trackId);
             } else {
@@ -1945,6 +1972,7 @@
     // ── Magazine scroll effect ──────────────────────────────
     const searchSection = document.querySelector('.search-section');
     const fadeInSections = document.querySelectorAll('.picks-page');
+    const picksPage      = document.getElementById('picks-page');
     const recentPage     = document.getElementById('recent-page');
     const recentSection  = recentPage?.querySelector('.recent-section');
 
@@ -1973,6 +2001,21 @@
         } else {
           recentPage.style.opacity = '0';
           recentPage.style.transform = 'translateY(28px)';
+        }
+
+        // Fade out picks page as recent section scrolls up:
+        // starts at 55% of viewport, gone by the time recent content hits the header.
+        if (picksPage) {
+          const HEADER_BOTTOM = 66; // site-header: top 10px + height 56px
+          const FADE_START    = vh * 0.55;
+          if (rect.top < FADE_START) {
+            const t = Math.max(0, Math.min(1,
+              (rect.top - HEADER_BOTTOM) / (FADE_START - HEADER_BOTTOM)
+            ));
+            picksPage.style.opacity = String(t);
+          } else {
+            picksPage.style.opacity = ''; // let the .visible class CSS handle it
+          }
         }
       }
     }

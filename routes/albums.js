@@ -217,11 +217,17 @@ router.get('/:spotifyId', async (req, res) => {
     // ── Phase 2 — all derived lookups run in parallel ────
     const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes] = await Promise.all([
       db.get(
+        // Also count picks from any dz_* alias of this album (same title+artist)
+        // so pick counts survive the Spotify-outage / Deezer-fallback split.
         `SELECT COUNT(r.id) AS count
          FROM   recommendations r
          JOIN   albums a ON a.id = r.album_id
-         WHERE  a.spotify_id = ? AND r.week_key = ?`,
-        spotifyId, weekKey
+         WHERE  r.week_key = ?
+           AND (a.spotify_id = ?
+                OR (a.spotify_id LIKE 'dz_%'
+                    AND LOWER(a.title)  = LOWER(?)
+                    AND LOWER(a.artist) = LOWER(?)))`,
+        weekKey, spotifyId, albumData.title, albumData.artist
       ),
       getAppleMusicUrl(spotifyId),
       getAlbumDescription(albumData.artist, albumData.title),

@@ -1,9 +1,36 @@
 'use strict';
-const express      = require('express');
-const { getDb }    = require('../db');
-const requireAuth  = require('../middleware/requireAuth');
+const express        = require('express');
+const { getDb }      = require('../db');
+const requireAuth    = require('../middleware/requireAuth');
+const { search: spotifySearch } = require('../lib/spotify');
 
 const router = express.Router();
+
+// Merges dz_* alias rows into their Spotify counterparts (or vice-versa) by
+// matching on normalised title+artist. Prefers the non-dz_ spotify_id for
+// display so picks survive Spotify outages without splitting the count.
+function mergeDzAliases(rows, limit) {
+  const seen = new Map(); // key: 'lower(title)|lower(artist)'
+  const out  = [];
+  for (const row of rows) {
+    const key = `${row.title.toLowerCase().trim()}|${row.artist.toLowerCase().trim()}`;
+    if (seen.has(key)) {
+      const existing = seen.get(key);
+      existing.count += row.count;
+      // Upgrade to real Spotify ID if we now have one
+      if (row.spotifyId && !row.spotifyId.startsWith('dz_') && existing.spotifyId.startsWith('dz_')) {
+        existing.spotifyId   = row.spotifyId;
+        existing.coverUrl    = row.coverUrl    ?? existing.coverUrl;
+        existing.releaseYear = row.releaseYear ?? existing.releaseYear;
+      }
+    } else {
+      const entry = { ...row };
+      seen.set(key, entry);
+      out.push(entry);
+    }
+  }
+  return out.sort((a, b) => b.count - a.count).slice(0, limit);
+}
 
 // Returns the ISO week key for a given Date, e.g. "2026-W10"
 function isoWeekKey(date = new Date()) {
@@ -33,6 +60,19 @@ router.post('/', requireAuth, async (req, res) => {
 
   const weekKey = isoWeekKey();
 
+  // If this was a Deezer fallback pick, try to resolve it to the real Spotify ID
+  // so picks stay unified once Spotify comes back up.
+  let finalSpotifyId = spotifyId;
+  if (spotifyId.startsWith('dz_')) {
+    try {
+      const { albums } = await spotifySearch(`${title} ${artist}`);
+      const match = albums?.find(a =>
+        a.title.toLowerCase().trim() === title.toLowerCase().trim()
+      );
+      if (match?.spotifyId) finalSpotifyId = match.spotifyId;
+    } catch { /* Spotify still unavailable — keep dz_ id */ }
+  }
+
   try {
     const db = await getDb();
 
@@ -45,10 +85,10 @@ router.post('/', requireAuth, async (req, res) => {
              artist       = excluded.artist,
              cover_url    = excluded.cover_url,
              release_year = excluded.release_year`,
-      spotifyId, title, artist, coverUrl ?? null, releaseYear ?? null
+      finalSpotifyId, title, artist, coverUrl ?? null, releaseYear ?? null
     );
 
-    const album = await db.get('SELECT id FROM albums WHERE spotify_id = ?', spotifyId);
+    const album = await db.get('SELECT id FROM albums WHERE spotify_id = ?', finalSpotifyId);
 
     // One recommendation per user per week — reject if they already picked
     const existing = await db.get(
@@ -95,7 +135,7 @@ router.get('/', async (req, res) => {
       weekKey
     );
 
-    res.json({ weekKey, albums: rows });
+    res.json({ weekKey, albums: mergeDzAliases(rows, 3) });
   } catch (err) {
     console.error('Recommendations fetch error:', err.message);
     res.status(500).json({ error: 'Server error.' });
@@ -132,7 +172,7 @@ router.get('/recent', async (req, res) => {
        LIMIT  20`,
       weekKey, weekKey
     );
-    res.json({ picks: rows });
+    res.json({ picks: mergeDzAliases(rows, 20) });
   } catch (err) {
     console.error('Recent picks error:', err.message);
     res.status(500).json({ error: 'Server error.' });
