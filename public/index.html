@@ -1504,7 +1504,19 @@
         row.style.animationDelay = `${TRACK_OFFSET + i * TRACK_DELAY}ms`;
       });
 
-      // 3. Glow Recommend twice after last track
+      // 3. Pick notes + comments drift in after tracks
+      const BOTTOM_OFFSET = TRACK_OFFSET + domTrackRows.length * TRACK_DELAY + TRACK_DUR * 0.4;
+      const bottomSections = [
+        inner.querySelector('.ap-pick-notes-section'),
+        inner.querySelector('#ap-comments-section'),
+      ].filter(Boolean);
+      bottomSections.forEach((el, i) => {
+        el.style.opacity = '0';
+        el.style.animation = `track-fade-in ${SECTION_DUR}ms ease-out forwards`;
+        el.style.animationDelay = `${BOTTOM_OFFSET + i * 110}ms`;
+      });
+
+      // 4. Glow Recommend twice after last track
       if (!isPick) {
         const pickBtn = inner.querySelector('.ap-pick-btn');
         const glowDelay = TRACK_OFFSET + domTrackRows.length * TRACK_DELAY + TRACK_DUR + 150;
