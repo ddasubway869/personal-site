@@ -900,7 +900,7 @@ html.light .icon-moon { display: block; }
   background: rgba(0,0,0,.35);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
-  z-index: 130;
+  z-index: 10100;
 }
 .sp-overlay[hidden] { display: none; }
 
@@ -911,7 +911,7 @@ html.light .icon-moon { display: block; }
   width: min(560px, 100vw);
   background: var(--bg);
   border-left: 1px solid var(--border);
-  z-index: 140;
+  z-index: 10140;
   overflow: hidden;
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
@@ -1056,7 +1056,7 @@ html.light .icon-moon { display: block; }
 }
 
 /* ── Artist panel (sits between search panel and album panel) */
-.artist-panel { z-index: 145; }
+.artist-panel { z-index: 10145; }
 
 /* ── Artist panel hero ───────────────────────────────────── */
 .artist-hero {
@@ -1118,7 +1118,7 @@ html.light .icon-moon { display: block; }
   background: rgba(0,0,0,.45);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
-  z-index: 150;
+  z-index: 10150;
 }
 .ap-overlay[hidden] { display: none; }
 
@@ -1129,7 +1129,7 @@ html.light .icon-moon { display: block; }
   width: min(480px, 100vw);
   background: var(--bg);
   border-left: 1px solid var(--border);
-  z-index: 160;
+  z-index: 10160;
   overflow: hidden;
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
@@ -1465,7 +1465,7 @@ html.light .icon-moon { display: block; }
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: .3rem;
-  z-index: 400;
+  z-index: 10400;
   min-width: 165px;
   box-shadow: var(--shadow);
 }
@@ -1592,7 +1592,7 @@ html.light .icon-moon { display: block; }
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
   padding: .35rem .25rem;
-  z-index: 200;
+  z-index: 10200;
   display: flex;
   flex-direction: column;
   min-width: 160px;
@@ -1766,7 +1766,7 @@ html.light .icon-moon { display: block; }
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 10200;
   background: rgba(0,0,0,.55);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
@@ -2065,7 +2065,7 @@ input[type="text"]:focus          { border-color: var(--subtle); box-shadow: 0 0
   font-size: .875rem;
   font-weight: 500;
   white-space: nowrap;
-  z-index: 300;
+  z-index: 10300;
   opacity: 0;
   pointer-events: none;
   transition: transform .28s cubic-bezier(.34,1.4,.64,1), opacity .2s;
