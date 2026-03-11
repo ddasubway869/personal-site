@@ -631,12 +631,12 @@ html.light .icon-moon { display: block; }
 
 /* ── Picks grid — member (infinite scroll) ───────────────── */
 .rp-grid-wrap {
-  -webkit-mask-image: linear-gradient(to right, transparent, black 4%, black 96%, transparent);
-  mask-image: linear-gradient(to right, transparent, black 4%, black 96%, transparent);
+  overflow: hidden;
 }
 
-/* Non-member: no edge fade, grid centers itself */
+/* Non-member: grid centers itself */
 .rp-grid-wrap--gated {
+  overflow: visible;
   -webkit-mask-image: none;
   mask-image: none;
 }
