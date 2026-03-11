@@ -14,6 +14,7 @@ const artistRoutes         = require('./routes/artists');
 const playerRoutes         = require('./routes/player');
 const feedbackRoutes       = require('./routes/feedback');
 const adminRoutes          = require('./routes/admin');
+const listenRoutes         = require('./routes/listens');
 const scheduler            = require('./lib/scheduler');
 
 const app  = express();
@@ -51,6 +52,7 @@ async function start() {
   app.use('/player',          playerRoutes);
   app.use('/feedback',        feedbackRoutes);
   app.use('/admin',           adminRoutes);
+  app.use('/listens',         listenRoutes);
 
   app.post('/contact', async (req, res) => {
     const { name, email, message } = req.body;
