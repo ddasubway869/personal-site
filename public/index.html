@@ -2079,7 +2079,7 @@
         vel = Math.max(-12, Math.min(12, throwVel));
         targetVel = isHover ? 0 : AUTO;
         // Suppress click if user actually dragged
-        if (dragMoved > 6) {
+        if (dragMoved > 12) {
           window.addEventListener('click', e => e.stopPropagation(), { capture: true, once: true });
         }
       });
