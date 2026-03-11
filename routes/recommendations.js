@@ -53,9 +53,9 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'spotifyId, title and artist are required.' });
   }
 
-  // note is optional; trim and cap at 500 chars
+  // note is optional; trim and cap at 150 chars
   const note = (typeof rawNote === 'string' && rawNote.trim())
-    ? rawNote.trim().slice(0, 500)
+    ? rawNote.trim().slice(0, 150)
     : null;
 
   const weekKey = isoWeekKey();
@@ -191,7 +191,8 @@ router.get('/me', requireAuth, async (req, res) => {
               a.title,
               a.artist,
               a.cover_url    AS coverUrl,
-              a.release_year AS releaseYear
+              a.release_year AS releaseYear,
+              r.note         AS note
        FROM   recommendations r
        JOIN   albums a ON a.id = r.album_id
        WHERE  r.user_id = ? AND r.week_key = ?`,
@@ -201,6 +202,32 @@ router.get('/me', requireAuth, async (req, res) => {
     res.json({ weekKey, recommendation: row ?? null });
   } catch (err) {
     console.error('Recommendations/me error:', err.message);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── PATCH /recommendations/note ───────────────────────────
+// Updates the note on the current user's pick for the current week.
+// Body: { note } (null or empty string clears it)
+router.patch('/note', requireAuth, async (req, res) => {
+  const weekKey  = isoWeekKey();
+  const rawNote  = req.body.note;
+  const note     = (typeof rawNote === 'string' && rawNote.trim())
+    ? rawNote.trim().slice(0, 150)
+    : null;
+
+  try {
+    const db     = await getDb();
+    const result = await db.run(
+      `UPDATE recommendations SET note = ? WHERE user_id = ? AND week_key = ?`,
+      note, req.session.userId, weekKey
+    );
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'No pick found for this week.' });
+    }
+    res.json({ ok: true, note });
+  } catch (err) {
+    console.error('Note update error:', err.message);
     res.status(500).json({ error: 'Server error.' });
   }
 });

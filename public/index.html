@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ARVL</title>
-  <link rel="stylesheet" href="style.css?v=51" />
+  <link rel="stylesheet" href="style.css?v=68" />
 </head>
 <body>
 
@@ -13,6 +13,7 @@
     <div class="header-inner">
       <a href="/" class="brand">ARVL</a>
       <div class="header-right">
+        <a class="btn-bmc" href="https://buymeacoffee.com/deandreraheem" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
           <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="4"/>
@@ -27,12 +28,16 @@
           <button class="btn-nav btn-nav--join" id="btn-register">Join the club</button>
         </div>
         <div class="auth-row" id="auth-loggedin" hidden>
-          <span class="user-chip" id="user-chip"></span>
+          <div class="user-menu">
+            <button class="user-menu-btn" id="user-chip"></button>
+            <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
+              <button class="user-menu-item" id="btn-logout">Sign out</button>
+            </div>
+          </div>
           <button class="btn-nav btn-spotify" id="btn-spotify" title="Connect Spotify">
             Connect
             <svg class="spotify-logo" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
           </button>
-          <button class="btn-nav" id="btn-logout">Log out</button>
         </div>
       </div>
     </div>
@@ -182,8 +187,8 @@
       <div class="pick-note-album-preview" id="pick-note-preview"></div>
       <label class="form-label" for="pick-note-input">Tell us why <span class="form-label-opt">(optional)</span></label>
       <textarea class="pick-note-textarea" id="pick-note-input"
-                placeholder="What makes this album special?" maxlength="500" rows="3"></textarea>
-      <p class="pick-note-count"><span id="pick-note-chars">0</span> / 500</p>
+                placeholder="What makes this album special?" maxlength="150" rows="3"></textarea>
+      <p class="pick-note-count"><span id="pick-note-chars">0</span> / 150</p>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="pick-note-cancel">Cancel</button>
         <button class="btn btn-submit" id="pick-note-submit">Submit pick</button>
@@ -199,13 +204,6 @@
       <img class="mp-art" id="mp-art" src="" alt="" role="button" title="Open album">
       <div class="mp-info">
         <span class="mp-track" id="mp-track"></span>
-        <div class="mp-stars" id="mp-stars">
-          <button class="mp-star" data-value="1">★</button>
-          <button class="mp-star" data-value="2">★</button>
-          <button class="mp-star" data-value="3">★</button>
-          <button class="mp-star" data-value="4">★</button>
-          <button class="mp-star" data-value="5">★</button>
-        </div>
       </div>
       <button class="mp-btn mp-btn--main" id="mp-playpause" aria-label="Play / Pause">▶</button>
       <button class="mp-btn" id="mp-next" aria-label="Next">⏭</button>
@@ -241,7 +239,6 @@
   </aside>
 
   <!-- ── Album panel ────────────────────────────────────── -->
-  <div class="ap-overlay" id="ap-overlay" hidden></div>
   <aside class="album-panel" id="album-panel" hidden aria-label="Album details">
     <div class="ap-inner" id="ap-inner">
       <p class="ap-loading">Loading…</p>
@@ -267,6 +264,81 @@
       const [y, w] = key.split('-W');
       return `Week ${+w} · ${y}`;
     }
+
+    // ── Landing page intro: page unblurs → border draws → types ──
+    (function() {
+      const wrap  = document.querySelector('.search-wrap');
+      const input = document.getElementById('search-input');
+      const FULL  = 'Search albums\u2026';
+
+      // After 2s blur clears, draw the search bar border from center-top clockwise
+      setTimeout(function() {
+        const W  = wrap.offsetWidth;
+        const H  = wrap.offsetHeight;
+        const R  = 8;    // border-radius
+        const sw = 1.5;  // stroke width
+        const o  = sw / 2;
+        const cx = W / 2;
+
+        // Path starts at center-top, goes clockwise all the way around
+        const d = [
+          `M ${cx} ${o}`,
+          `L ${W-R-o} ${o}`,
+          `Q ${W-o} ${o} ${W-o} ${R+o}`,
+          `L ${W-o} ${H-R-o}`,
+          `Q ${W-o} ${H-o} ${W-R-o} ${H-o}`,
+          `L ${R+o} ${H-o}`,
+          `Q ${o} ${H-o} ${o} ${H-R-o}`,
+          `L ${o} ${R+o}`,
+          `Q ${o} ${o} ${R+o} ${o}`,
+          `L ${cx} ${o}`,
+        ].join(' ');
+
+        const NS  = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(NS, 'svg');
+        svg.style.cssText = `position:absolute;top:0;left:0;width:${W}px;height:${H}px;pointer-events:none;overflow:visible;z-index:2;`;
+
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('pathLength', '1');
+        path.setAttribute('fill', 'none');
+        path.style.stroke = 'var(--border)';
+        path.setAttribute('stroke-opacity', '1');
+        path.setAttribute('stroke-width', sw);
+        path.style.strokeDasharray  = '1';
+        path.style.strokeDashoffset = '1';
+
+        const icon = wrap.querySelector('.search-icon');
+
+        svg.appendChild(path);
+        wrap.style.opacity  = '1';
+        input.style.opacity = '0'; // hide input entirely until trace is done
+        if (icon) icon.style.opacity = '0';
+        wrap.appendChild(svg);
+
+        // Animate the stroke drawing around the rectangle
+        path.animate(
+          [{ strokeDashoffset: '1' }, { strokeDashoffset: '0' }],
+          { duration: 850, easing: 'ease-out', fill: 'forwards' }
+        );
+
+        // After draw: reveal input, light pulse, type placeholder
+        setTimeout(function() {
+          svg.remove();
+          input.style.opacity = '1';
+          if (icon) icon.style.opacity = '1';
+          input.style.animation = 'search-glow-pulse 1s ease-out 2';
+          input.addEventListener('animationend', function() { input.style.animation = ''; }, { once: true });
+          input.placeholder = '';
+          var i = 0;
+          var t = setInterval(function() {
+            i++;
+            input.placeholder = FULL.slice(0, i);
+            if (i >= FULL.length) clearInterval(t);
+          }, 65);
+        }, 900);
+      }, 2000);
+    })();
 
     let _toastTimer;
     function showToast(msg, type = 'ok', onClick = null) {
@@ -338,6 +410,7 @@
     // ── Auth state ─────────────────────────────────────────
     let me          = null;
     let myPickId    = null;
+    let myPickNote  = null;
     let pendingPick = null;
 
     // ── Spotify player ─────────────────────────────────────
@@ -426,7 +499,6 @@
     let _mpAlbumId       = null; // Spotify album ID currently in the mini player
     let _mpTrackId       = null; // Spotify track ID currently playing
     let _mpTracks        = null; // cached track list for that album
-    let _mpRatings       = {};   // { [trackSpotifyId]: rating } for current album
     let _mpTracklistOpen = false;
 
     function renderMiniPlayer(d) {
@@ -448,19 +520,13 @@
       if (albumChanged) {
         _mpAlbumId = d.item.album?.id;
         _mpTracks  = null;
-        _mpRatings = {};
-        if (me) fetchMpRatings(); // load ratings for new album
         if (_mpTracklistOpen) renderMpTracklist(d.item.uri);
       }
 
       if (trackChanged) {
         _mpTrackId = d.item.id;
-        setMpStars(_mpRatings[_mpTrackId] || 0);
         if (_mpTracklistOpen) highlightMpTrack(d.item.uri);
       }
-
-      // Show stars only when logged in
-      document.getElementById('mp-stars').style.display = me ? 'flex' : 'none';
 
       // Keep track-play-btn icons in the open album panel in sync with Spotify state
       document.querySelectorAll('.track-play-btn[data-track-id]').forEach(btn => {
@@ -468,47 +534,6 @@
         btn.innerHTML = isPlaying ? pauseIcon() : playIcon();
       });
     }
-
-    async function fetchMpRatings() {
-      if (!_mpAlbumId || !me) return;
-      try {
-        const r = await fetch(`/albums/${encodeURIComponent(_mpAlbumId)}/track-ratings`);
-        const d = await r.json();
-        _mpRatings = {};
-        (d.ratings || []).forEach(({ trackId, rating }) => { _mpRatings[trackId] = rating; });
-        setMpStars(_mpRatings[_mpTrackId] || 0);
-      } catch {}
-    }
-
-    function setMpStars(value) {
-      document.querySelectorAll('#mp-stars .mp-star').forEach(s => {
-        s.classList.toggle('mp-star--on', parseInt(s.dataset.value) <= value);
-      });
-    }
-
-    // Wire up mini player star hover + click
-    const mpStarsEl = document.getElementById('mp-stars');
-    mpStarsEl.addEventListener('mouseover', e => {
-      const s = e.target.closest('.mp-star');
-      if (s) setMpStars(parseInt(s.dataset.value));
-    });
-    mpStarsEl.addEventListener('mouseleave', () => {
-      setMpStars(_mpRatings[_mpTrackId] || 0);
-    });
-    mpStarsEl.addEventListener('click', async e => {
-      const s = e.target.closest('.mp-star');
-      if (!s || !me || !_mpTrackId || !_mpAlbumId) return;
-      const rating = parseInt(s.dataset.value);
-      _mpRatings[_mpTrackId] = rating;
-      setMpStars(rating);
-      try {
-        await fetch(`/albums/${encodeURIComponent(_mpAlbumId)}/track-ratings`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ trackId: _mpTrackId, rating }),
-        });
-      } catch {}
-    });
 
     async function renderMpTracklist(activeTrackUri) {
       const panel = document.getElementById('mp-tracklist');
@@ -739,12 +764,22 @@
       closeModal('modal-welcome');
     });
 
+    // ── User menu dropdown ──────────────────────────────────
+    const _userMenuDropdown = document.getElementById('user-menu-dropdown');
+    document.getElementById('user-chip').addEventListener('click', e => {
+      e.stopPropagation();
+      _userMenuDropdown.hidden = !_userMenuDropdown.hidden;
+    });
+    document.addEventListener('click', () => { _userMenuDropdown.hidden = true; });
+
     // ── Logout ─────────────────────────────────────────────
     document.getElementById('btn-logout').addEventListener('click', async () => {
+      _userMenuDropdown.hidden = true;
       await fetch('/auth/logout', { method: 'POST' });
       applyAuthUI(null);
       loadLeaderboard();
-      myPickId = null;
+      myPickId   = null;
+      myPickNote = null;
       showToast('Logged out.');
     });
 
@@ -753,7 +788,8 @@
       try {
         const r = await fetch('/recommendations/me');
         const d = await r.json();
-        myPickId = d.recommendation?.spotifyId ?? null;
+        myPickId   = d.recommendation?.spotifyId ?? null;
+        myPickNote = d.recommendation?.note ?? null;
         renderMyPick(d.recommendation);
         rerenderPickButtons();
       } catch {}
@@ -841,13 +877,16 @@
     // ── Recommend ──────────────────────────────────────────
     let _pendingPickAlbum = null;
 
-    function openPickNoteModal(album) {
+    let _pickNoteEditMode = false; // true = editing existing note
+
+    function openPickNoteModal(album, existingNote = null) {
       if (!me) {
         pendingPick = album;
         openModal('modal-login');
         return;
       }
       _pendingPickAlbum = album;
+      _pickNoteEditMode = existingNote !== null || album.spotifyId === myPickId;
       const bg = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
       document.getElementById('pick-note-preview').innerHTML = `
         <div class="pick-note-cover" ${bg}></div>
@@ -856,9 +895,13 @@
           <p class="pick-note-artist">${esc(album.artist)}</p>
         </div>
       `;
-      document.getElementById('pick-note-input').value = '';
-      document.getElementById('pick-note-chars').textContent = '0';
+      const existing = existingNote ?? (album.spotifyId === myPickId ? myPickNote : null) ?? '';
+      const input = document.getElementById('pick-note-input');
+      input.value = existing;
+      document.getElementById('pick-note-chars').textContent = existing.length;
       document.getElementById('pick-note-status').textContent = '';
+      document.getElementById('pick-note-title').textContent = _pickNoteEditMode ? 'Edit your note' : 'Submit your pick';
+      document.getElementById('pick-note-submit').textContent = _pickNoteEditMode ? 'Save note' : 'Submit pick';
       openModal('modal-pick-note');
     }
 
@@ -871,7 +914,8 @@
         });
         const d = await r.json();
         if (!r.ok) { showToast(d.error || 'Error saving pick.', 'err'); return; }
-        myPickId = album.spotifyId;
+        myPickId   = album.spotifyId;
+        myPickNote = note ?? null;
         renderMyPick(album);
         rerenderPickButtons();
         loadLeaderboard();
@@ -892,12 +936,31 @@
     });
     document.getElementById('pick-note-cancel').addEventListener('click', () => closeModal('modal-pick-note'));
     document.getElementById('pick-note-submit').addEventListener('click', async () => {
-      const note = document.getElementById('pick-note-input').value.trim() || null;
-      const btn  = document.getElementById('pick-note-submit');
+      const note   = document.getElementById('pick-note-input').value.trim() || null;
+      const btn    = document.getElementById('pick-note-submit');
+      const status = document.getElementById('pick-note-status');
       btn.disabled = true;
-      await doRecommend(_pendingPickAlbum, note);
-      closeModal('modal-pick-note');
-      btn.disabled = false;
+      if (_pickNoteEditMode) {
+        try {
+          const r = await fetch('/recommendations/note', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note }),
+          });
+          const d = await r.json();
+          if (!r.ok) { status.textContent = d.error || 'Error saving note.'; status.className = 'form-status err'; btn.disabled = false; return; }
+          myPickNote = note;
+          closeModal('modal-pick-note');
+          showToast(note ? 'Note saved.' : 'Note removed.');
+          // Reopen the panel to reflect the updated note
+          if (_panelSpotifyId) openAlbumPanel(_panelSpotifyId);
+        } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; }
+        btn.disabled = false;
+      } else {
+        await doRecommend(_pendingPickAlbum, note);
+        closeModal('modal-pick-note');
+        btn.disabled = false;
+      }
     });
 
     // ── Search ─────────────────────────────────────────────
@@ -979,6 +1042,7 @@
             ${isPick ? 'Your pick ✓' : 'Recommend'}
           </button>
         `;
+        row.style.animationDelay = `${albums.indexOf(album) * 55}ms`;
         row.querySelector('.sr-main').addEventListener('click', () => {
           document.getElementById('search-results').hidden = true;
           openAlbumPanel(album.spotifyId, album);
@@ -1024,9 +1088,8 @@
 
     function openAlbumPanel(spotifyId, hintAlbum = null) {
       _panelSpotifyId = spotifyId;
-      const panel   = document.getElementById('album-panel');
-      const overlay = document.getElementById('ap-overlay');
-      const inner   = document.getElementById('ap-inner');
+      const panel = document.getElementById('album-panel');
+      const inner = document.getElementById('ap-inner');
 
       // Show placeholder immediately from hint data while we fetch
       if (hintAlbum) {
@@ -1045,9 +1108,7 @@
         inner.innerHTML = '<p class="ap-loading">Loading…</p>';
       }
 
-      overlay.hidden = false;
-      panel.hidden   = false;
-      document.body.style.overflow = 'hidden';
+      panel.hidden = false;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => panel.classList.add('ap-open'));
       });
@@ -1058,7 +1119,8 @@
         fetch(`/albums/${encodeURIComponent(spotifyId)}/comments`).then(r => r.json()),
       ]).then(([albumRes, commentsRes]) => {
         if (_panelSpotifyId !== spotifyId) return; // panel switched
-        renderAlbumPanel(albumRes.album, albumRes.tracks, albumRes.weekPickCount, commentsRes.comments ?? [], albumRes.appleMusicUrl ?? null, albumRes.description ?? null, albumRes.descriptionSource ?? null, albumRes.pickNotes ?? []);
+        const panelPickNote = (albumRes.album?.spotifyId === myPickId) ? myPickNote : null;
+        renderAlbumPanel(albumRes.album, albumRes.tracks, albumRes.weekPickCount, commentsRes.comments ?? [], albumRes.appleMusicUrl ?? null, albumRes.description ?? null, albumRes.descriptionSource ?? null, albumRes.pickNotes ?? [], panelPickNote);
       }).catch(() => {
         if (_panelSpotifyId !== spotifyId) return;
         document.getElementById('ap-inner').innerHTML = '<p class="ap-loading" style="color:var(--error)">Failed to load album.</p>';
@@ -1066,23 +1128,21 @@
     }
 
     function closeAlbumPanel() {
-      const panel       = document.getElementById('album-panel');
-      const overlay     = document.getElementById('ap-overlay');
-      const searchPanel = document.getElementById('search-panel');
-      const artistPanel = document.getElementById('artist-panel');
+      const panel = document.getElementById('album-panel');
       panel.classList.remove('ap-open');
       _panelSpotifyId = null;
       _audio.pause();
       _playingTrackId = null;
-      // Only restore scrolling if no other panels are open
-      if (searchPanel.hidden && artistPanel.hidden) document.body.style.overflow = '';
       panel.addEventListener('transitionend', () => {
-        panel.hidden   = true;
-        overlay.hidden = true;
+        panel.hidden = true;
       }, { once: true });
     }
 
-    document.getElementById('ap-overlay').addEventListener('click', closeAlbumPanel);
+    document.addEventListener('mousedown', e => {
+      const panel = document.getElementById('album-panel');
+      if (!panel.classList.contains('ap-open')) return;
+      if (!panel.contains(e.target)) closeAlbumPanel();
+    });
     document.getElementById('sp-overlay').addEventListener('click', () => {
       const artistPanel = document.getElementById('artist-panel');
       if (!artistPanel.hidden) { closeArtistPanel(); return; }
@@ -1346,7 +1406,7 @@
       });
     }
 
-    function renderAlbumPanel(album, tracks, weekPickCount, comments, appleMusicUrl = null, description = null, descriptionSource = null, pickNotes = []) {
+    function renderAlbumPanel(album, tracks, weekPickCount, comments, appleMusicUrl = null, description = null, descriptionSource = null, pickNotes = [], myNote = null) {
       const inner  = document.getElementById('ap-inner');
       const isPick = album.spotifyId === myPickId;
 
@@ -1378,9 +1438,6 @@
             <span class="track-name">${esc(t.name)}</span>
             ${t.artist !== album.artist ? `<span class="track-feat">${esc(t.artist)}</span>` : ''}
           </div>
-          <div class="track-stars${me ? '' : ' track-stars--locked'}" data-track-id="${esc(t.id)}">
-            ${[1,2,3,4,5].map(i => `<button class="t-star" data-value="${i}">★</button>`).join('')}
-          </div>
           <span class="track-duration">${fmtDuration(t.durationMs)}</span>
         </div>
       `).join('');
@@ -1396,17 +1453,17 @@
         <div class="ap-hero">
           ${album.coverUrl ? `<div class="ap-cover" style="background-image:url('${esc(album.coverUrl)}')"></div>` : ''}
           <div class="ap-meta">
-            <h2 class="ap-title">${esc(album.title)}${album.releaseYear ? `<span class="ap-header-year"> · ${esc(album.releaseYear)}</span>` : ''}</h2>
+            <h2 class="ap-title">${esc(album.title)}</h2>
             <p class="ap-artist">${artistLinks}</p>
-            <div class="ap-header-score" id="ap-header-score" hidden>
-              <span class="ap-score-val" id="ap-score-val"></span>
-              <span class="ap-score-label" id="ap-score-label">/ 5</span>
-            </div>
+            ${album.releaseYear ? `<p class="ap-sub">${esc(album.releaseYear)}</p>` : ''}
           </div>
         </div>
         <div class="ap-action-bar">
-          <div class="ap-action-right" style="margin-left:auto">
-            ${weekPickCount ? `<span class="ap-pick-count">${weekPickCount} ${weekPickCount === 1 ? 'pick' : 'picks'}</span>` : ''}
+          <div class="ap-action-left">
+            ${weekPickCount ? `<span class="ap-pick-count">${weekPickCount} ${weekPickCount === 1 ? 'pick' : 'picks'} this week</span>` : '<span></span>'}
+            ${isPick && !myNote ? `<button class="ap-note-btn" id="ap-note-add-btn">+ Add a note</button>` : ''}
+          </div>
+          <div class="ap-actions">
             <button class="btn-pick ap-pick-btn ${isPick ? 'btn-pick--active' : ''}"
                     data-spotify-id="${esc(album.spotifyId)}"
                     ${isPick ? 'disabled' : ''}>
@@ -1453,8 +1510,8 @@
         <div class="ap-section ap-pick-notes-section">
           <h3 class="ap-section-title">Why members picked this</h3>
           ${pickNotes.map(n => `
-            <div class="ap-pick-note">
-              <p class="ap-pick-note-text">"${esc(n.note)}"</p>
+            <div class="ap-pick-note"${isPick && n.username === me?.username ? ' data-own="1"' : ''}>
+              <p class="ap-pick-note-text">"${esc(n.note)}"${isPick && n.username === me?.username ? ` <button class="ap-note-btn ap-note-pencil" id="ap-note-pencil-btn" aria-label="Edit note"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : ''}</p>
               <p class="ap-pick-note-by">— ${esc(n.username)}</p>
             </div>`).join('')}
         </div>` : ''}
@@ -1547,88 +1604,6 @@
         btn.addEventListener('click', () => {
           inner.querySelectorAll('.ap-tab-btn').forEach(b => b.classList.toggle('ap-tab-btn--active', b === btn));
           inner.querySelectorAll('.ap-tab-panel').forEach(p => { p.hidden = p.id !== `ap-tab-${btn.dataset.tab}`; });
-        });
-      });
-
-      // ── Track ratings ─────────────────────────────────────
-      const trackMap = {}; // trackId → user's rating
-
-      function setTrackStars(trackId, value) {
-        const container = inner.querySelector(`.track-stars[data-track-id="${trackId}"]`);
-        if (!container) return;
-        container.querySelectorAll('.t-star').forEach(s => {
-          s.classList.toggle('t-star--active', parseInt(s.dataset.value) <= value);
-        });
-      }
-
-      function updateHeaderScore(average, count) {
-        const scoreEl = document.getElementById('ap-header-score');
-        const valEl   = document.getElementById('ap-score-val');
-        const lblEl   = document.getElementById('ap-score-label');
-        if (!scoreEl) return;
-        if (average != null) {
-          valEl.textContent = parseFloat(average).toFixed(1);
-          if (lblEl) lblEl.textContent = `/ 5 · ${count} rating${count !== 1 ? 's' : ''}`;
-          scoreEl.hidden = false;
-        } else {
-          scoreEl.hidden = true;
-        }
-      }
-
-      // Fetch community average rating (visible to all users, including logged out)
-      fetch(`/albums/${encodeURIComponent(album.spotifyId)}/rating`)
-        .then(r => r.json())
-        .then(d => updateHeaderScore(d.average, d.count))
-        .catch(() => {});
-
-      // Fetch saved track ratings if logged in
-      if (me) {
-        fetch(`/albums/${encodeURIComponent(album.spotifyId)}/track-ratings`)
-          .then(r => r.json())
-          .then(d => {
-            (d.ratings || []).forEach(({ trackId, rating }) => {
-              trackMap[trackId] = rating;
-              setTrackStars(trackId, rating);
-            });
-          })
-          .catch(() => {});
-      }
-
-      // Wire up star interactions per track
-      inner.querySelectorAll('.track-stars').forEach(container => {
-        const trackId = container.dataset.trackId;
-
-        // Hover always works — preview stars on hover, clear on leave
-        container.addEventListener('mouseover', e => {
-          const s = e.target.closest('.t-star');
-          if (s) setTrackStars(trackId, parseInt(s.dataset.value));
-        });
-        container.addEventListener('mouseleave', () => {
-          setTrackStars(trackId, trackMap[trackId] || 0);
-        });
-
-        if (!me) {
-          // Logged-out: clicking shows a clickable toast nudge
-          container.addEventListener('click', () =>
-            showToast('Sign in to rate', 'info', () => openModal('modal-login'))
-          );
-          return;
-        }
-        container.addEventListener('click', async e => {
-          const s = e.target.closest('.t-star');
-          if (!s) return;
-          const rating = parseInt(s.dataset.value);
-          trackMap[trackId] = rating;
-          setTrackStars(trackId, rating);
-          try {
-            const res  = await fetch(`/albums/${encodeURIComponent(album.spotifyId)}/track-ratings`, {
-              method:  'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify({ trackId, rating }),
-            });
-            const data = await res.json();
-            if (data.average != null) updateHeaderScore(data.average, data.count);
-          } catch {}
         });
       });
 
@@ -1762,6 +1737,88 @@
 
       // Pick button
       inner.querySelector('.ap-pick-btn')?.addEventListener('click', () => openPickNoteModal(album));
+
+      // ── Inline note editing ────────────────────────────────
+      function createNoteEditEl(currentNote) {
+        const d = document.createElement('div');
+        d.className = 'ap-note-edit';
+        d.innerHTML = `
+          <textarea class="ap-note-edit-input" maxlength="150" rows="2"
+            placeholder="What makes this album special?">${esc(currentNote ?? '')}</textarea>
+          <div class="ap-note-edit-footer">
+            <span class="ap-note-edit-count"><span class="ap-note-edit-chars">${(currentNote ?? '').length}</span>/150</span>
+            <div class="ap-note-edit-btns">
+              <button type="button" class="ap-note-edit-cancel-btn">Cancel</button>
+              <button type="button" class="ap-note-edit-save-btn">Save</button>
+            </div>
+          </div>
+          <p class="ap-note-edit-status" aria-live="polite"></p>`;
+        d.querySelector('textarea').addEventListener('input', e => {
+          d.querySelector('.ap-note-edit-chars').textContent = e.target.value.length;
+        });
+        return d;
+      }
+
+      async function saveNoteEl(editEl, onSuccess) {
+        const note    = editEl.querySelector('textarea').value.trim() || null;
+        const saveBtn = editEl.querySelector('.ap-note-edit-save-btn');
+        const status  = editEl.querySelector('.ap-note-edit-status');
+        saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+        try {
+          const r = await fetch('/recommendations/note', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note }),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || 'Server error.');
+          myPickNote = note;
+          showToast(note ? 'Note saved.' : 'Note removed.');
+          onSuccess();
+        } catch(err) {
+          status.textContent = err.message;
+          saveBtn.disabled = false; saveBtn.textContent = 'Save';
+        }
+      }
+
+      // Use event delegation so pencil still works after cancel restores DOM
+      inner.addEventListener('click', e => {
+        if (inner.querySelector('.ap-note-edit')) return; // already editing
+
+        // Pencil clicked — inline edit the existing note card
+        if (e.target.closest('#ap-note-pencil-btn')) {
+          const noteDiv = inner.querySelector('.ap-pick-note[data-own]');
+          const textP   = noteDiv.querySelector('.ap-pick-note-text');
+          const byP     = noteDiv.querySelector('.ap-pick-note-by');
+          textP.hidden = true; byP.hidden = true;
+          const editEl = createNoteEditEl(myNote);
+          noteDiv.appendChild(editEl);
+          editEl.querySelector('textarea').focus();
+          editEl.querySelector('textarea').setSelectionRange(9999, 9999);
+          editEl.querySelector('.ap-note-edit-cancel-btn').addEventListener('click', () => {
+            editEl.remove(); textP.hidden = false; byP.hidden = false;
+          });
+          editEl.querySelector('.ap-note-edit-save-btn').addEventListener('click', () =>
+            saveNoteEl(editEl, () => openAlbumPanel(_panelSpotifyId))
+          );
+        }
+
+        // "+ Add a note" clicked — inline editor appears below action bar
+        if (e.target.closest('#ap-note-add-btn')) {
+          const addBtn    = inner.querySelector('#ap-note-add-btn');
+          const actionBar = inner.querySelector('.ap-action-bar');
+          addBtn.hidden = true;
+          const editEl = createNoteEditEl(null);
+          editEl.classList.add('ap-note-edit--add');
+          actionBar.insertAdjacentElement('afterend', editEl);
+          editEl.querySelector('textarea').focus();
+          editEl.querySelector('.ap-note-edit-cancel-btn').addEventListener('click', () => {
+            editEl.remove(); addBtn.hidden = false;
+          });
+          editEl.querySelector('.ap-note-edit-save-btn').addEventListener('click', () =>
+            saveNoteEl(editEl, () => openAlbumPanel(_panelSpotifyId))
+          );
+        }
+      });
 
       // Login prompt
       inner.querySelector('#ap-login-prompt-btn')?.addEventListener('click', () => {
