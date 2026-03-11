@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ARVL</title>
-  <link rel="stylesheet" href="style.css?v=68" />
+  <link rel="stylesheet" href="style.css?v=70" />
 </head>
 <body>
 
@@ -1120,7 +1120,7 @@
       ]).then(([albumRes, commentsRes]) => {
         if (_panelSpotifyId !== spotifyId) return; // panel switched
         const panelPickNote = (albumRes.album?.spotifyId === myPickId) ? myPickNote : null;
-        renderAlbumPanel(albumRes.album, albumRes.tracks, albumRes.weekPickCount, commentsRes.comments ?? [], albumRes.appleMusicUrl ?? null, albumRes.description ?? null, albumRes.descriptionSource ?? null, albumRes.pickNotes ?? [], panelPickNote);
+        renderAlbumPanel(albumRes.album, albumRes.tracks, albumRes.weekPickCount, commentsRes.comments ?? [], albumRes.appleMusicUrl ?? null, albumRes.description ?? null, albumRes.descriptionSource ?? null, albumRes.pickNotes ?? [], panelPickNote, albumRes.listenCount ?? 0, albumRes.isListening ?? false);
       }).catch(() => {
         if (_panelSpotifyId !== spotifyId) return;
         document.getElementById('ap-inner').innerHTML = '<p class="ap-loading" style="color:var(--error)">Failed to load album.</p>';
@@ -1406,7 +1406,7 @@
       });
     }
 
-    function renderAlbumPanel(album, tracks, weekPickCount, comments, appleMusicUrl = null, description = null, descriptionSource = null, pickNotes = [], myNote = null) {
+    function renderAlbumPanel(album, tracks, weekPickCount, comments, appleMusicUrl = null, description = null, descriptionSource = null, pickNotes = [], myNote = null, listenCount = 0, isListening = false) {
       const inner  = document.getElementById('ap-inner');
       const isPick = album.spotifyId === myPickId;
 
@@ -1462,6 +1462,7 @@
           <div class="ap-action-left">
             ${weekPickCount ? `<span class="ap-pick-count">${weekPickCount} ${weekPickCount === 1 ? 'pick' : 'picks'} this week</span>` : '<span></span>'}
             ${isPick && !myNote ? `<button class="ap-note-btn" id="ap-note-add-btn">+ Add a note</button>` : ''}
+            ${isPick && listenCount > 0 ? `<span class="ap-members-listening">Members are listening</span>` : ''}
           </div>
           <div class="ap-actions">
             <button class="btn-pick ap-pick-btn ${isPick ? 'btn-pick--active' : ''}"
@@ -1607,6 +1608,15 @@
         });
       });
 
+      // ── Silent listen signal ────────────────────────────────
+      let _listenSignaled = false;
+      function signalListen() {
+        if (_listenSignaled || !me || isPick) return;
+        _listenSignaled = true;
+        fetch(`/listens/${encodeURIComponent(album.spotifyId)}`, { method: 'POST' })
+          .catch(() => {});
+      }
+
       // ── Per-track play buttons ──────────────────────────────
       let _popover = null;
 
@@ -1642,6 +1652,7 @@
             const mode = b.dataset.mode;
             sessionStorage.setItem('spotifyPlayMode', mode);
             openSpotify(trackId, mode);
+            signalListen();
             closePopover();
           });
         });
@@ -1665,6 +1676,7 @@
                 offset:      { position: trackNum - 1 },
               }, { silent: true });
               if (result.ok) {
+                signalListen();
                 setTimeout(syncPlayerState, 600);
                 setTimeout(syncPlayerState, 1500);
                 return;
@@ -1685,6 +1697,7 @@
               offset:      { uri: `spotify:track:${trackId}` },
             }, { silent: true });
             if (result.ok) {
+              signalListen();
               setTimeout(syncPlayerState, 600);
               setTimeout(syncPlayerState, 1500); // second poll — Spotify API sometimes needs more time
               return;
@@ -1696,6 +1709,7 @@
           const savedMode = sessionStorage.getItem('spotifyPlayMode');
           if (savedMode) {
             openSpotify(trackId, savedMode);
+            signalListen();
           } else {
             showPlayPopover(btn, trackId);
           }
@@ -1730,6 +1744,9 @@
           `;
           _streamPop.style.top   = `${rect.bottom + 6}px`;
           _streamPop.style.right = `${window.innerWidth - rect.right}px`;
+          _streamPop.querySelectorAll('.stream-option').forEach(a => {
+            a.addEventListener('click', () => signalListen());
+          });
           document.body.appendChild(_streamPop);
           setTimeout(() => document.addEventListener('click', closeStreamPop, { once: true }), 0);
         });

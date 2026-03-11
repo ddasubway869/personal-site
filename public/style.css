@@ -1506,6 +1506,12 @@ html.light .icon-moon { display: block; }
   flex-direction: column;
   gap: .3rem;
 }
+.ap-members-listening {
+  font-size: .8125rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
 .ap-note-btn {
   background: none;
   border: none;
