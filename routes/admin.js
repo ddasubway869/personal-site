@@ -31,7 +31,6 @@ router.get('/dashboard', requireSecret, async (req, res) => {
       JOIN   users  u  ON u.id  = r.user_id
       JOIN   albums al ON al.id = r.album_id
       ORDER  BY r.created_at DESC
-      LIMIT  100
     `),
     db.all(`
       SELECT COALESCE(u.username, u.email, 'anonymous') AS user,

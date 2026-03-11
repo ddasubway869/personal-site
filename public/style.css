@@ -624,32 +624,30 @@ html.light .icon-moon { display: block; }
 }
 
 .recent-section {
-  max-width: 960px;
+  max-width: 1100px;
   width: 100%;
   padding: 0 1.25rem 2.5rem;
 }
 
-/* ── Marquee ─────────────────────────────────────────────── */
-.rp-marquee {
-  overflow: hidden;
+/* ── Picks grid ──────────────────────────────────────────── */
+.rp-grid-wrap {
   -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
   mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
 }
 
-.rp-marquee { cursor: grab; }
-.rp-marquee.dragging { cursor: grabbing; }
-
-.rp-track {
-  display: flex;
-  gap: .75rem;
-  width: max-content;
-  padding: .25rem 0;
-  will-change: transform;
+.rp-grid {
+  display: grid;
+  grid-template-rows: repeat(2, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: 160px;
+  gap: 1.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: .25rem;
 }
+.rp-grid::-webkit-scrollbar { display: none; }
 
 .rp-card {
-  width: 170px;
-  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-radius: var(--radius);
@@ -708,15 +706,6 @@ html.light .icon-moon { display: block; }
   margin-top: .1rem;
 }
 
-.rp-foot {
-  padding: .1rem 0 .4rem;
-}
-
-.rp-count {
-  font-size: .75rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
 
 /* ── Picks page ──────────────────────────────────────────── */
 .picks-page {

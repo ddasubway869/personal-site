@@ -144,7 +144,7 @@ router.get('/', async (req, res) => {
 
 // ── GET /recommendations/recent ──────────────────────────
 // Returns this week's picks (excluding top 3), grouped by album,
-// with pick counts, newest first. Up to 20 albums.
+// with pick counts, newest first. Up to 50 albums.
 router.get('/recent', async (req, res) => {
   const weekKey = isoWeekKey();
   try {
@@ -169,10 +169,10 @@ router.get('/recent', async (req, res) => {
          )
        GROUP  BY r.album_id
        ORDER  BY count DESC, MAX(r.created_at) DESC
-       LIMIT  20`,
+       LIMIT  50`,
       weekKey, weekKey
     );
-    res.json({ picks: mergeDzAliases(rows, 20) });
+    res.json({ picks: mergeDzAliases(rows, 50) });
   } catch (err) {
     console.error('Recent picks error:', err.message);
     res.status(500).json({ error: 'Server error.' });

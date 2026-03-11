@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ARVL</title>
-  <link rel="stylesheet" href="style.css?v=70" />
+  <link rel="stylesheet" href="style.css?v=71" />
 </head>
 <body>
 
@@ -1979,110 +1979,32 @@
         el.innerHTML = '<p class="empty-state" style="padding:0 1.25rem">No picks yet — be the first!</p>';
         return;
       }
-      el.innerHTML = '';
 
-      function makeCard(p, clickable) {
+      const wrap = document.createElement('div');
+      wrap.className = 'rp-grid-wrap';
+      const grid = document.createElement('div');
+      grid.className = 'rp-grid';
+
+      picks.forEach(p => {
         const card = document.createElement('div');
         card.className = 'rp-card';
         const bg = p.coverUrl ? `style="background-image:url('${esc(p.coverUrl)}')"` : '';
-        const countLabel = (p.count === 1) ? '1 pick' : `${p.count} picks`;
         card.innerHTML = `
           <button class="rp-card-btn" aria-label="Open ${esc(p.title)}">
             <div class="rp-cover" ${bg}></div>
             <div class="rp-body">
               <p class="rp-title">${esc(p.title)}</p>
               <p class="rp-artist">${esc(p.artist)}</p>
-              ${p.releaseYear ? `<p class="rp-year">${esc(p.releaseYear)}</p>` : ''}
-            </div>
-            <div class="rp-foot">
-              <p class="rp-count">${countLabel}</p>
             </div>
           </button>
         `;
-        if (clickable) {
-          card.querySelector('.rp-card-btn').addEventListener('click', () => openAlbumPanel(p.spotifyId, p));
-        }
-        return card;
-      }
-
-      const marquee = document.createElement('div');
-      marquee.className = 'rp-marquee';
-      const track = document.createElement('div');
-      track.className = 'rp-track';
-
-      // Two copies side-by-side for seamless infinite loop
-      picks.forEach(p => track.appendChild(makeCard(p, true)));
-      picks.forEach(p => track.appendChild(makeCard(p, false)));
-
-      marquee.appendChild(track);
-      el.appendChild(marquee);
-
-      // ── JS-driven marquee: smooth hover, drag, wheel ─────────
-      const CARD_W  = 170 + 12;               // card + gap
-      const LOOP    = picks.length * CARD_W;  // one copy width
-      const AUTO    = 0.45;                   // px/frame auto-scroll
-
-      let pos       = 0;
-      let vel       = AUTO;
-      let targetVel = AUTO;
-      let dragging  = false;
-      let dragX     = 0;
-      let throwVel  = 0;
-      let dragMoved = 0;
-      let isHover   = false;
-      let wTimer    = null;
-
-      function frame() {
-        if (!dragging) {
-          vel += (targetVel - vel) * 0.055;
-          pos  = ((pos + vel) % LOOP + LOOP) % LOOP;
-          track.style.transform = `translateX(${-pos}px)`;
-        }
-        requestAnimationFrame(frame);
-      }
-      requestAnimationFrame(frame);
-
-      // Hover: ease to stop / resume
-      marquee.addEventListener('mouseenter', () => { isHover = true;  if (!dragging) targetVel = 0; });
-      marquee.addEventListener('mouseleave', () => { isHover = false; if (!dragging) targetVel = AUTO; });
-
-      // Wheel / Magic Mouse / trackpad
-      marquee.addEventListener('wheel', e => {
-        // Only take over horizontal scroll; let vertical scroll pass through to the page
-        if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-        e.preventDefault();
-        pos = ((pos + e.deltaX * 0.6) % LOOP + LOOP) % LOOP;
-        track.style.transform = `translateX(${-pos}px)`;
-        vel = 0; targetVel = 0;
-        clearTimeout(wTimer);
-        wTimer = setTimeout(() => { if (!isHover && !dragging) targetVel = AUTO; }, 900);
-      }, { passive: false });
-
-      // Drag
-      marquee.addEventListener('mousedown', e => {
-        dragging = true; dragX = e.clientX; throwVel = 0; dragMoved = 0;
-        marquee.classList.add('dragging');
-        e.preventDefault();
+        card.querySelector('.rp-card-btn').addEventListener('click', () => openAlbumPanel(p.spotifyId, p));
+        grid.appendChild(card);
       });
-      window.addEventListener('mousemove', e => {
-        if (!dragging) return;
-        const dx = dragX - e.clientX;
-        throwVel = dx; dragMoved += Math.abs(dx);
-        pos = ((pos + dx) % LOOP + LOOP) % LOOP;
-        track.style.transform = `translateX(${-pos}px)`;
-        dragX = e.clientX;
-      });
-      window.addEventListener('mouseup', () => {
-        if (!dragging) return;
-        dragging = false;
-        marquee.classList.remove('dragging');
-        vel = Math.max(-12, Math.min(12, throwVel));
-        targetVel = isHover ? 0 : AUTO;
-        // Suppress click if user actually dragged
-        if (dragMoved > 12) {
-          window.addEventListener('click', e => e.stopPropagation(), { capture: true, once: true });
-        }
-      });
+
+      wrap.appendChild(grid);
+      el.innerHTML = '';
+      el.appendChild(wrap);
     }
 
     // ── Scroll hints ────────────────────────────────────────
