@@ -127,6 +127,15 @@ async function getDb() {
     'ALTER TABLE users ADD COLUMN username TEXT',
     // Optional "tell us why" note attached to a weekly recommendation
     'ALTER TABLE recommendations ADD COLUMN note TEXT',
+    // "I'm listening" — one row per user per album per week
+    `CREATE TABLE IF NOT EXISTS listens (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      album_id   INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+      week_key   TEXT    NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(user_id, album_id, week_key)
+    )`,
     // Album detail cache — full track list + artists array from Spotify
     'ALTER TABLE albums ADD COLUMN tracks_json TEXT',
     'ALTER TABLE albums ADD COLUMN artists_json TEXT',

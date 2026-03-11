@@ -123,7 +123,8 @@ router.get('/:spotifyId', async (req, res) => {
       if (!albumData) return res.status(502).json({ error: 'Could not load album from Deezer.' });
 
       const weekKey = isoWeekKey();
-      const [pickRow, albumDesc, artistBio, pickNotes] = await Promise.all([
+      const userId  = req.session?.userId ?? null;
+      const [pickRow, albumDesc, artistBio, pickNotes, listenRow, userListenRow] = await Promise.all([
         db.get(
           `SELECT COUNT(r.id) AS count FROM recommendations r JOIN albums a ON a.id = r.album_id WHERE a.spotify_id = ? AND r.week_key = ?`,
           spotifyId, weekKey
@@ -137,6 +138,14 @@ router.get('/:spotifyId', async (req, res) => {
            ORDER  BY r.created_at DESC LIMIT 6`,
           spotifyId
         ),
+        db.get(
+          `SELECT COUNT(*) AS n FROM listens l JOIN albums a ON a.id = l.album_id WHERE a.spotify_id = ? AND l.week_key = ?`,
+          spotifyId, weekKey
+        ),
+        userId ? db.get(
+          `SELECT l.id FROM listens l JOIN albums a ON a.id = l.album_id WHERE l.user_id = ? AND a.spotify_id = ? AND l.week_key = ?`,
+          userId, spotifyId, weekKey
+        ) : Promise.resolve(null),
       ]);
 
       const description       = albumDesc || artistBio || null;
@@ -150,6 +159,8 @@ router.get('/:spotifyId', async (req, res) => {
         description,
         descriptionSource,
         pickNotes,
+        listenCount:       listenRow?.n ?? 0,
+        isListening:       !!userListenRow,
         _deezer:           true,
       });
     } catch (err) {
@@ -215,7 +226,8 @@ router.get('/:spotifyId', async (req, res) => {
     }
 
     // ── Phase 2 — all derived lookups run in parallel ────
-    const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes] = await Promise.all([
+    const userId = req.session?.userId ?? null;
+    const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes, listenRow, userListenRow] = await Promise.all([
       db.get(
         // Also count picks from any dz_* alias of this album (same title+artist)
         // so pick counts survive the Spotify-outage / Deezer-fallback split.
@@ -244,6 +256,14 @@ router.get('/:spotifyId', async (req, res) => {
          LIMIT  6`,
         spotifyId
       ),
+      db.get(
+        `SELECT COUNT(*) AS n FROM listens l JOIN albums a ON a.id = l.album_id WHERE a.spotify_id = ? AND l.week_key = ?`,
+        spotifyId, weekKey
+      ),
+      userId ? db.get(
+        `SELECT l.id FROM listens l JOIN albums a ON a.id = l.album_id WHERE l.user_id = ? AND a.spotify_id = ? AND l.week_key = ?`,
+        userId, spotifyId, weekKey
+      ) : Promise.resolve(null),
     ]);
 
     const description       = albumDesc || artistBio || null;
@@ -257,6 +277,8 @@ router.get('/:spotifyId', async (req, res) => {
       description,
       descriptionSource,
       pickNotes,
+      listenCount:       listenRow?.n ?? 0,
+      isListening:       !!userListenRow,
       _cached:           fromCache,
     });
   } catch (err) {

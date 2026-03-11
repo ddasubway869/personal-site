@@ -704,6 +704,7 @@
         closeModal('modal-login');
         applyAuthUI({ email: d.email, username: d.username });
         loadLeaderboard();
+        loadRecentPicks();
         if (sessionStorage.getItem('freshVerify')) {
           sessionStorage.removeItem('freshVerify');
           document.getElementById('welcome-eyebrow').textContent = "You're in.";
@@ -778,6 +779,7 @@
       await fetch('/auth/logout', { method: 'POST' });
       applyAuthUI(null);
       loadLeaderboard();
+      loadRecentPicks();
       myPickId   = null;
       myPickNote = null;
       showToast('Logged out.');
@@ -1980,12 +1982,9 @@
         return;
       }
 
-      const wrap = document.createElement('div');
-      wrap.className = 'rp-grid-wrap';
-      const grid = document.createElement('div');
-      grid.className = 'rp-grid';
+      const gated = !me;
 
-      picks.forEach(p => {
+      const makeCard = (p) => {
         const card = document.createElement('div');
         card.className = 'rp-card';
         const bg = p.coverUrl ? `style="background-image:url('${esc(p.coverUrl)}')"` : '';
@@ -1999,11 +1998,27 @@
           </button>
         `;
         card.querySelector('.rp-card-btn').addEventListener('click', () => openAlbumPanel(p.spotifyId, p));
-        grid.appendChild(card);
-      });
+        return card;
+      };
+
+      el.innerHTML = '';
+
+      const wrap = document.createElement('div');
+      wrap.className = gated ? 'rp-grid-wrap rp-grid-wrap--gated' : 'rp-grid-wrap';
+      const grid = document.createElement('div');
+      grid.className = 'rp-grid';
+
+      if (gated) {
+        picks.slice(0, 6).forEach(p => grid.appendChild(makeCard(p)));
+      } else {
+        [...picks, ...picks].forEach(p => grid.appendChild(makeCard(p)));
+        grid.addEventListener('scroll', () => {
+          const half = grid.scrollWidth / 2;
+          if (grid.scrollLeft >= half) grid.scrollLeft -= half;
+        });
+      }
 
       wrap.appendChild(grid);
-      el.innerHTML = '';
       el.appendChild(wrap);
     }
 
