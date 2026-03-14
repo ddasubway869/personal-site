@@ -1729,7 +1729,7 @@
           if (_streamPop) { closeStreamPop(); return; }
 
           const spotifyHref = album._deezer
-            ? `https://open.spotify.com/search/${encodeURIComponent(album.title + ' ' + album.artist)}/albums`
+            ? `https://open.spotify.com/search/${encodeURIComponent(album.title + ' ' + album.artist)}`
             : `https://open.spotify.com/album/${album.spotifyId}`;
           const appleMusicHref = appleMusicUrl || `https://music.apple.com/us/search?term=${encodeURIComponent(album.title + ' ' + album.artist)}`;
           const tidalHref  = `https://tidal.com/search/albums?q=${encodeURIComponent(album.title + ' ' + album.artist)}`;
