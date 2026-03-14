@@ -631,8 +631,12 @@ html.light .icon-moon { display: block; }
 
 /* ── Picks grid — member (infinite scroll) ───────────────── */
 .rp-grid-wrap {
-  overflow: hidden;
+  /* Scroll lives here so Firefox/Edge work (grid overflow-x is buggy) */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
+.rp-grid-wrap::-webkit-scrollbar { display: none; }
 
 /* Non-member: grid centers itself */
 .rp-grid-wrap--gated {
@@ -651,11 +655,9 @@ html.light .icon-moon { display: block; }
   grid-auto-flow: column;
   grid-auto-columns: 170px;
   gap: .75rem;
-  overflow-x: auto;
-  scrollbar-width: none;
+  width: max-content; /* let grid size to content; parent scrolls */
   padding: .25rem 0;
 }
-.rp-grid::-webkit-scrollbar { display: none; }
 
 .rp-card {
   flex-shrink: 0;

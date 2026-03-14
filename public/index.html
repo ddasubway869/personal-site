@@ -2012,9 +2012,9 @@
         picks.slice(0, 6).forEach(p => grid.appendChild(makeCard(p)));
       } else {
         [...picks, ...picks].forEach(p => grid.appendChild(makeCard(p)));
-        grid.addEventListener('scroll', () => {
-          const half = grid.scrollWidth / 2;
-          if (grid.scrollLeft >= half) grid.scrollLeft -= half;
+        wrap.addEventListener('scroll', () => {
+          const half = wrap.scrollWidth / 2;
+          if (wrap.scrollLeft >= half) wrap.scrollLeft -= half;
         });
       }
 
