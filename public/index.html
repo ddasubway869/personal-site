@@ -1088,6 +1088,8 @@
       return new Date(unixSec * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
+    let _apStreamPopClose = null; // tracks the current outside-click listener so it can be removed before re-opening
+
     function openAlbumPanel(spotifyId, hintAlbum = null) {
       _panelSpotifyId = spotifyId;
       const panel = document.getElementById('album-panel');
@@ -1750,7 +1752,8 @@
             a.addEventListener('click', () => signalListen());
           });
           document.body.appendChild(_streamPop);
-          setTimeout(() => document.addEventListener('click', closeStreamPop, { once: true }), 0);
+          if (_apStreamPopClose) { document.removeEventListener('click', _apStreamPopClose); _apStreamPopClose = null; }
+          setTimeout(() => { _apStreamPopClose = closeStreamPop; document.addEventListener('click', closeStreamPop, { once: true }); }, 0);
         });
       }
 
