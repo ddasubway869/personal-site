@@ -628,8 +628,8 @@
         const d = await r.json();
         if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
         closeModal('modal-login');
-        me = { email: d.email, username: d.username, isAdmin: !!d.isAdmin };
-        try { sessionStorage.setItem('arvl_u2', JSON.stringify(me)); } catch {}
+        me = { email: d.email, username: d.username, isAdmin: !!d.isAdmin, isSupporter: !!d.isSupporter };
+        try { sessionStorage.setItem('arvl_u3', JSON.stringify(me)); } catch {}
         initHeader({ active: null });
         document.getElementById('my-pick-section').hidden = false;
         loadMyPick();
@@ -681,7 +681,7 @@
         if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
         closeModal('modal-register');
         e.target.reset();
-        sessionStorage.removeItem('arvl_u2');
+        sessionStorage.removeItem('arvl_u3');
         me = await initHeader({ active: null });
         // Show welcome moment
         document.getElementById('welcome-name').textContent = username;
