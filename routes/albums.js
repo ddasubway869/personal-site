@@ -234,7 +234,7 @@ router.get('/:spotifyId', async (req, res) => {
 
     // ── Phase 1: try DB cache first ──────────────────────
     const dbRow = await db.get(
-      `SELECT title, artist, cover_url, release_year, tracks_json, artists_json
+      `SELECT title, artist, cover_url, release_year, tracks_json, artists_json, genre
        FROM   albums
        WHERE  spotify_id = ?
          AND  tracks_json IS NOT NULL
@@ -254,6 +254,7 @@ router.get('/:spotifyId', async (req, res) => {
         artists:     JSON.parse(dbRow.artists_json || '[]'),
         coverUrl:    dbRow.cover_url,
         releaseYear: dbRow.release_year,
+        genre:       dbRow.genre ?? null,
         tracks:      JSON.parse(dbRow.tracks_json),
       };
       fromCache = true;
@@ -286,7 +287,7 @@ router.get('/:spotifyId', async (req, res) => {
 
     // ── Phase 2 — all derived lookups run in parallel ────
     const userId = req.session?.userId ?? null;
-    const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes, weekPickersRows, listenRow, userListenRow, userCrateRow, userListenLaterRow] = await Promise.all([
+    const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes, weekPickersRows, listenRow, userListenRow, userCrateRow, userListenLaterRow, genreRow] = await Promise.all([
       db.get(
         // Also count picks from any dz_* alias of this album (same title+artist)
         // so pick counts survive the Spotify-outage / Deezer-fallback split.
@@ -362,7 +363,12 @@ router.get('/:spotifyId', async (req, res) => {
         `SELECT ll.id FROM listen_later ll JOIN albums a ON a.id = ll.album_id WHERE ll.user_id = ? AND a.spotify_id = ?`,
         userId, spotifyId
       ) : Promise.resolve(null),
+      // Genre is stored on albums; fetch it separately so Spotify-path gets it too
+      fromCache ? Promise.resolve(null) : db.get('SELECT genre FROM albums WHERE spotify_id = ?', spotifyId),
     ]);
+
+    // For Spotify-fetched albums, attach genre from DB (cache path already has it)
+    if (!fromCache) albumData.genre = genreRow?.genre ?? null;
 
     // Attach isLiked to pick notes
     if (userId && pickNotes.length) {
@@ -738,6 +744,34 @@ router.post('/:spotifyId/track-ratings', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Track rating post error:', err.message);
     res.status(500).json({ error: 'Failed to save track rating.' });
+  }
+});
+
+// ── POST /albums/:spotifyId/genre ─────────────────────────
+// First-write-wins: sets genre only if currently NULL.
+// Returns { ok, genre, alreadySet } where alreadySet=true means another member beat them to it.
+router.post('/:spotifyId/genre', requireAuth, async (req, res) => {
+  const { spotifyId } = req.params;
+  const { genre } = req.body;
+  if (!genre || typeof genre !== 'string' || !genre.trim()) {
+    return res.status(400).json({ error: 'Genre is required.' });
+  }
+  try {
+    const db     = await getDb();
+    const result = await db.run(
+      'UPDATE albums SET genre = ? WHERE spotify_id = ? AND genre IS NULL',
+      genre.trim(), spotifyId
+    );
+    if (result.changes === 0) {
+      // Already tagged — return whatever is set
+      const row = await db.get('SELECT genre FROM albums WHERE spotify_id = ?', spotifyId);
+      if (!row) return res.status(404).json({ error: 'Album not found.' });
+      return res.json({ ok: true, genre: row.genre, alreadySet: true });
+    }
+    res.json({ ok: true, genre: genre.trim() });
+  } catch (err) {
+    console.error('Genre set error:', err.message);
+    res.status(500).json({ error: 'Failed to save genre.' });
   }
 });
 

@@ -1064,12 +1064,166 @@ html.light .icon-moon { display: block; }
 
 .lb-card-footer {
   padding: .35rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
 }
 
 .lb-card-count {
   font-size: .75rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Genre tag ──────────────────────────────────────────── */
+.genre-tag {
+  display: inline-block;
+  font-size: .6rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: .1em .45em;
+  line-height: 1.6;
+}
+html.light .genre-tag { border-color: #b8b8b0; }
+html.light .genre-filter-btn { border-color: #b8b8b0; }
+
+/* Prevent genre-tag from stretching inside flex columns (e.g. album hero) */
+.ap-meta .genre-tag { align-self: flex-start; }
+
+/* ── Album page genre tagging ───────────────────────────── */
+.ap-tag-genre-btn {
+  display: inline-block;
+  align-self: flex-start;
+  background: none;
+  border: 1px solid var(--muted);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: .6rem;
+  font-weight: 500;
+  padding: .1em .45em;
+  cursor: pointer;
+  letter-spacing: .01em;
+  line-height: 1.5;
+  transition: color .15s, border-color .15s;
+}
+.ap-tag-genre-btn:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+html.light .ap-tag-genre-btn { border-color: #b8b8b0; }
+html.light .ap-tag-genre-btn:hover { border-color: var(--text); }
+
+.ap-genre-picker {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .6rem .75rem;
+  margin-bottom: 1rem;
+  animation: subgenre-fade-in .2s ease;
+}
+.ap-genre-picker-label {
+  font-size: .72rem;
+  color: var(--muted);
+  font-weight: 500;
+  margin-bottom: .5rem;
+}
+.ap-genre-picker-actions {
+  display: flex;
+  gap: .5rem;
+  margin-top: .5rem;
+  align-items: center;
+}
+html.light .ap-genre-picker { border-color: #b8b8b0; }
+
+/* ── Genre filter bar ───────────────────────────────────── */
+/* ── Genre pill selector (pick modal) ───────────────────── */
+.genre-pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+
+#pick-subgenre-card {
+  animation: subgenre-fade-in .2s ease;
+}
+
+@keyframes subgenre-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.genre-pill {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 500;
+  padding: .3em .75em;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+
+.genre-pill:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.genre-pill--active {
+  border-color: var(--text);
+  color: var(--text);
+  background: var(--surface);
+}
+
+.genre-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding: 0 1.25rem .75rem;
+}
+
+.genre-subfilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+  padding: 0 1.25rem .75rem 1.5rem;
+  animation: subgenre-fade-in .2s ease;
+}
+
+.genre-filter-btn--sub {
+  font-size: .63rem;
+  padding: .18em .55em;
+  color: var(--muted);
+  opacity: .8;
+}
+
+.genre-filter-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 500;
+  padding: .25em .7em;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+
+.genre-filter-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.genre-filter-btn--active {
+  border-color: var(--text);
+  color: var(--text);
+  background: var(--surface);
 }
 
 /* ── Locked leaderboard (logged-out) ─────────────────────── */
@@ -2568,6 +2722,7 @@ input[type="text"]:focus          { border-color: var(--subtle); box-shadow: 0 0
   font-size: .875rem;
   font-weight: 500;
   white-space: nowrap;
+  text-align: center;
   z-index: 10300;
   opacity: 0;
   pointer-events: none;
@@ -2581,6 +2736,12 @@ input[type="text"]:focus          { border-color: var(--subtle); box-shadow: 0 0
 .toast--clickable { pointer-events: auto; cursor: pointer; }
 .toast--clickable:hover { opacity: .8; }
 .toast--visible { pointer-events: auto; }
+.toast-sub {
+  display: block;
+  font-size: .7rem;
+  opacity: .65;
+  margin-top: .2em;
+}
 .toast-link {
   background: none;
   border: none;

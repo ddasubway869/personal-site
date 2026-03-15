@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
-  <link rel="stylesheet" href="/style.css?v=102"/>
+  <link rel="stylesheet" href="/style.css?v=114"/>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -23,13 +23,31 @@
   <main class="page-container" id="page-main">
     <p class="ap-loading">Loading…</p>
   </main>
-  <script src="/js/common.js"></script>
+  <script src="/js/common.js?v=2"></script>
   <script>
   'use strict';
 
   const username = decodeURIComponent(location.pathname.split('/u/')[1] || '');
 
+  const SUBGENRES = {
+    'Hip-Hop':        ['Trap', 'Boom Bap', 'G-Funk', 'Drill', 'Conscious Rap', 'Mumble Rap', 'Lo-Fi Hip-Hop', 'Jazz Rap', 'Southern Rap', 'Crunk', 'Bounce', 'Emo Rap', 'Alternative', 'Experimental'],
+    'R&B / Soul':     ['Contemporary R&B', 'Neo-Soul', 'New Jack Swing', 'Hip-Hop Soul', 'Trap-Soul', 'Alternative R&B', 'Doo-Wop'],
+    'Pop':            ['Pop Rock', 'Electropop', 'Synth-Pop', 'Teen Pop', 'Dance-Pop', 'Disco-Pop', 'Indie Pop', 'Pop-R&B', 'Bedroom Pop', 'Traditional Pop'],
+    'Rock':           ['Classic Rock', 'Hard Rock', 'Punk Rock', 'Grunge', 'Post-Grunge', 'Alternative Rock', 'Indie Rock', 'Pop-Punk', 'Progressive Rock', 'Glam Rock', 'Electronic Rock', 'Post-Punk', 'New Wave', 'Shoegaze', 'Dream Pop', 'Math Rock'],
+    'Electronic':     ['House', 'Techno', 'Dubstep', 'Drum n Bass', 'Trance', 'Hardstyle', 'Experimental', 'Electro & Fusion'],
+    'Jazz':           ['Dixieland', 'Swing', 'Bebop', 'Cool Jazz', 'Hard Bop', 'Modal Jazz', 'Jazz Fusion', 'Smooth Jazz', 'Latin Jazz', 'Free Jazz', 'Neo-Bop'],
+    'Metal':          ['Thrash Metal', 'Death Metal', 'Black Metal', 'Progressive Metal', 'Metalcore', 'Groove Metal', 'Symphonic Metal', 'Nu Metal', 'Blackened Deathcore', 'Djent'],
+    'Classical':      ['Baroque', 'Classical', 'Romantic', 'Modernism & Avant-Garde', 'Minimalism', 'Contemporary Classical'],
+    'Folk & Country': ['Folk Rock', 'Indie Folk', 'Celtic Folk', 'Bluegrass', 'Anti-Folk', 'Folk Metal', 'Americana', 'Outlaw Country', 'Country Pop', 'Bro-Country', 'Red Dirt', 'Nashville Sound', 'Honky-Tonk'],
+    'World':          ['Afrobeats', 'Reggaeton', 'Salsa', 'Bachata', 'Regional Mexican', 'Bongo Flava', 'Worldbeat', 'K-Pop'],
+  };
+
+  // ── Popover state (module-level so wireOverlayCard can use it) ───────────
+  let _pop = null;
+  const closePop = () => { if (_pop) { _pop.remove(); _pop = null; } };
+
   function overlayCard(a, removeTitle) {
+    const genreLabel = a.genre ? (a.genre.includes(', ') ? a.genre.split(', ')[1] : a.genre) : '';
     return `
       <div class="profile-card profile-card--crate"
            data-spotify-id="${esc(a.spotifyId)}"
@@ -49,6 +67,7 @@
         <div class="profile-card-body">
           <p class="profile-card-title">${esc(a.title)}</p>
           <p class="profile-card-artist">${esc(a.artist)}</p>
+          ${genreLabel ? `<span class="genre-tag">${esc(genreLabel)}</span>` : ''}
         </div>
       </div>`;
   }
@@ -56,6 +75,7 @@
   function albumGrid(albums, type, isSelf) {
     if (!albums.length) return '<p class="cp-empty">Nothing here yet.</p>';
     return `<div class="profile-grid">${albums.map(a => {
+      const genreLabel = a.genre ? (a.genre.includes(', ') ? a.genre.split(', ')[1] : a.genre) : '';
       if (type === 'crate' && isSelf) return overlayCard(a, 'Remove from Collection');
       if (type === 'later' && isSelf) return overlayCard(a, 'Remove from Listen Later');
       return `
@@ -65,21 +85,155 @@
             <p class="profile-card-title">${esc(a.title)}</p>
             <p class="profile-card-artist">${esc(a.artist)}</p>
             ${type === 'picks' && a.note ? `<p class="profile-card-note">"${esc(a.note)}"</p>` : ''}
+            ${genreLabel ? `<span class="genre-tag">${esc(genreLabel)}</span>` : ''}
           </div>
         </a>`;
     }).join('')}
     </div>`;
   }
 
+  function wireOverlayCard(card, removeUrl, removedKey, toastMsg) {
+    const { spotifyId, title, artist } = card.dataset;
+
+    card.querySelector('.profile-card-play-btn').addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      if (_pop) { closePop(); return; }
+      const spotifyHref    = `https://open.spotify.com/album/${spotifyId}`;
+      const appleMusicHref = `https://music.apple.com/us/search?term=${encodeURIComponent(title + ' ' + artist)}`;
+      const tidalHref      = `https://tidal.com/search/albums?q=${encodeURIComponent(title + ' ' + artist)}`;
+      const deezerHref     = `https://www.deezer.com/search/${encodeURIComponent((title + ' ' + artist).toLowerCase())}/album`;
+      const rect = e.currentTarget.getBoundingClientRect();
+      _pop = document.createElement('div');
+      _pop.className = 'stream-popover';
+      _pop.innerHTML = `
+        <a class="stream-option" href="${spotifyHref}"    target="_blank" rel="noopener">Spotify</a>
+        <a class="stream-option" href="${appleMusicHref}" target="_blank" rel="noopener">Apple Music</a>
+        <a class="stream-option" href="${tidalHref}"      target="_blank" rel="noopener">Tidal</a>
+        <a class="stream-option" href="${deezerHref}"     target="_blank" rel="noopener">Deezer</a>`;
+      _pop.style.top  = `${rect.bottom + 6}px`;
+      _pop.style.left = `${rect.left}px`;
+      document.body.appendChild(_pop);
+      setTimeout(() => document.addEventListener('click', closePop, { once: true }), 0);
+    });
+
+    card.querySelector('.profile-card-remove-btn').addEventListener('click', async e => {
+      e.preventDefault(); e.stopPropagation();
+      try {
+        const r = await fetch(removeUrl, { method: 'POST' });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d[removedKey]) { card.remove(); showToast(toastMsg); }
+      } catch {}
+    });
+  }
+
+  function wireOverlayCards(container, type) {
+    if (type === 'crate') {
+      container.querySelectorAll('.profile-card--crate').forEach(card =>
+        wireOverlayCard(card, `/crate/${encodeURIComponent(card.dataset.spotifyId)}`, 'inCrate', 'Removed from Collection')
+      );
+    } else if (type === 'later') {
+      container.querySelectorAll('.profile-card--crate').forEach(card =>
+        wireOverlayCard(card, `/listen-later/${encodeURIComponent(card.dataset.spotifyId)}`, 'inListenLater', 'Removed from Listen Later')
+      );
+    }
+  }
+
+  function initProfileFilters(albums, type, tabKey, isSelf) {
+    const filterWrap  = document.getElementById(`pf-filter-${tabKey}`);
+    const gridEl      = document.getElementById(`pf-grid-${tabKey}`);
+    if (!filterWrap || !gridEl) return;
+
+    const hasGenre = albums.some(a => a.genre);
+    if (!hasGenre) return;
+
+    const usedCores = [...new Set(albums.map(a => a.genre?.split(', ')[0].trim()).filter(Boolean))];
+
+    filterWrap.innerHTML = `
+      <div class="genre-filters" id="pf-filters-${tabKey}" style="margin-bottom:.5rem">
+        <button class="genre-filter-btn genre-filter-btn--active" data-genre="">All</button>
+        ${usedCores.map(g => `<button class="genre-filter-btn" data-genre="${esc(g)}">${esc(g)}</button>`).join('')}
+      </div>
+      <div class="genre-subfilters" id="pf-subfilters-${tabKey}" style="display:none;margin-bottom:.5rem"></div>
+    `;
+
+    let activeCore = '';
+    let activeSub  = '';
+    const filtersEl    = document.getElementById(`pf-filters-${tabKey}`);
+    const subfiltersEl = document.getElementById(`pf-subfilters-${tabKey}`);
+
+    function rerender(filtered) {
+      gridEl.innerHTML = albumGrid(filtered, type, isSelf);
+      wireOverlayCards(gridEl, type);
+    }
+
+    function buildSubRow(core) {
+      const usedSubs = new Set(
+        albums
+          .filter(a => a.genre && a.genre.startsWith(core))
+          .map(a => { const p = a.genre.split(', '); return p[1] || null; })
+          .filter(Boolean)
+      );
+      return (SUBGENRES[core] || []).filter(s => usedSubs.has(s));
+    }
+
+    filtersEl.addEventListener('click', e => {
+      const btn = e.target.closest('.genre-filter-btn');
+      if (!btn) return;
+      filtersEl.querySelectorAll('.genre-filter-btn').forEach(b => b.classList.remove('genre-filter-btn--active'));
+      btn.classList.add('genre-filter-btn--active');
+      activeCore = btn.dataset.genre;
+      activeSub  = '';
+
+      const subs = activeCore ? buildSubRow(activeCore) : [];
+      if (subs.length) {
+        subfiltersEl.innerHTML = subs.map(s =>
+          `<button class="genre-filter-btn genre-filter-btn--sub" data-subgenre="${esc(s)}">${esc(s)}</button>`
+        ).join('');
+        subfiltersEl.style.display = 'flex';
+        subfiltersEl.style.animation = 'none';
+        subfiltersEl.offsetHeight;
+        subfiltersEl.style.animation = '';
+
+        subfiltersEl.querySelectorAll('.genre-filter-btn--sub').forEach(sb => {
+          sb.addEventListener('click', () => {
+            subfiltersEl.querySelectorAll('.genre-filter-btn--sub').forEach(b => b.classList.remove('genre-filter-btn--active'));
+            if (activeSub === sb.dataset.subgenre) {
+              activeSub = '';
+            } else {
+              sb.classList.add('genre-filter-btn--active');
+              activeSub = sb.dataset.subgenre;
+            }
+            const filtered = activeSub
+              ? albums.filter(a => a.genre && a.genre.includes(activeSub))
+              : albums.filter(a => a.genre && (a.genre === activeCore || a.genre.startsWith(activeCore + ',')));
+            rerender(filtered);
+          });
+        });
+      } else {
+        subfiltersEl.innerHTML = '';
+        subfiltersEl.style.display = 'none';
+      }
+
+      const filtered = activeCore
+        ? albums.filter(a => a.genre === activeCore || (a.genre && a.genre.startsWith(activeCore + ',')))
+        : albums;
+      rerender(filtered);
+    });
+  }
+
   function renderPage(data, me) {
     document.title = `${data.username || username} — ARVL`;
-    // API returns createdAt, not memberSince
     const joined = data.createdAt
       ? new Date(data.createdAt * 1000).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
       : '';
     const pickCount     = (data.picks || []).length;
     const followerCount = data.followerCount ?? 0;
     const initial       = (data.username || username || '?')[0].toUpperCase();
+
+    const _picks = data.picks       || [];
+    const _crate = data.crate       || [];
+    const _later = data.listenLater || [];
 
     const main = document.getElementById('page-main');
     main.innerHTML = `
@@ -103,9 +257,19 @@
         <button class="ap-tab-btn" data-tab="crate">Collection</button>
         <button class="ap-tab-btn" data-tab="later">Listen Later</button>
       </nav>
-      <div class="ap-tab-panel" id="up-tab-picks">${albumGrid(data.picks || [], 'picks', data.isSelf)}</div>
-      <div class="ap-tab-panel" id="up-tab-crate"  hidden>${albumGrid(data.crate || [], 'crate', data.isSelf)}</div>
-      <div class="ap-tab-panel" id="up-tab-later"  hidden>${albumGrid(data.listenLater || [], 'later', data.isSelf)}</div>
+
+      <div class="ap-tab-panel" id="up-tab-picks">
+        <div id="pf-filter-picks"></div>
+        <div id="pf-grid-picks">${albumGrid(_picks, 'picks', data.isSelf)}</div>
+      </div>
+      <div class="ap-tab-panel" id="up-tab-crate" hidden>
+        <div id="pf-filter-crate"></div>
+        <div id="pf-grid-crate">${albumGrid(_crate, 'crate', data.isSelf)}</div>
+      </div>
+      <div class="ap-tab-panel" id="up-tab-later" hidden>
+        <div id="pf-filter-later"></div>
+        <div id="pf-grid-later">${albumGrid(_later, 'later', data.isSelf)}</div>
+      </div>
     `;
 
     // Tab switching
@@ -121,51 +285,14 @@
     const tabParam = new URLSearchParams(location.search).get('tab');
     if (tabParam) showProfileTab(tabParam);
 
-    // Wire overlay cards (crate + listen later)
-    let _pop = null;
-    const closePop = () => { if (_pop) { _pop.remove(); _pop = null; } };
+    // Genre filters per tab
+    initProfileFilters(_picks, 'picks', 'picks', data.isSelf);
+    initProfileFilters(_crate, 'crate', 'crate', data.isSelf);
+    initProfileFilters(_later, 'later', 'later', data.isSelf);
 
-    function wireOverlayCard(card, removeUrl, removedKey, toastMsg) {
-      const { spotifyId, title, artist } = card.dataset;
-
-      card.querySelector('.profile-card-play-btn').addEventListener('click', e => {
-        e.preventDefault(); e.stopPropagation();
-        if (_pop) { closePop(); return; }
-        const spotifyHref    = `https://open.spotify.com/album/${spotifyId}`;
-        const appleMusicHref = `https://music.apple.com/us/search?term=${encodeURIComponent(title + ' ' + artist)}`;
-        const tidalHref      = `https://tidal.com/search/albums?q=${encodeURIComponent(title + ' ' + artist)}`;
-        const deezerHref     = `https://www.deezer.com/search/${encodeURIComponent((title + ' ' + artist).toLowerCase())}/album`;
-        const rect = e.currentTarget.getBoundingClientRect();
-        _pop = document.createElement('div');
-        _pop.className = 'stream-popover';
-        _pop.innerHTML = `
-          <a class="stream-option" href="${spotifyHref}"    target="_blank" rel="noopener">Spotify</a>
-          <a class="stream-option" href="${appleMusicHref}" target="_blank" rel="noopener">Apple Music</a>
-          <a class="stream-option" href="${tidalHref}"      target="_blank" rel="noopener">Tidal</a>
-          <a class="stream-option" href="${deezerHref}"     target="_blank" rel="noopener">Deezer</a>`;
-        _pop.style.top  = `${rect.bottom + 6}px`;
-        _pop.style.left = `${rect.left}px`;
-        document.body.appendChild(_pop);
-        setTimeout(() => document.addEventListener('click', closePop, { once: true }), 0);
-      });
-
-      card.querySelector('.profile-card-remove-btn').addEventListener('click', async e => {
-        e.preventDefault(); e.stopPropagation();
-        try {
-          const r = await fetch(removeUrl, { method: 'POST' });
-          if (!r.ok) return;
-          const d = await r.json();
-          if (!d[removedKey]) { card.remove(); showToast(toastMsg); }
-        } catch {}
-      });
-    }
-
-    document.querySelectorAll('#up-tab-crate .profile-card--crate').forEach(card =>
-      wireOverlayCard(card, `/crate/${encodeURIComponent(card.dataset.spotifyId)}`, 'inCrate', 'Removed from Collection')
-    );
-    document.querySelectorAll('#up-tab-later .profile-card--crate').forEach(card =>
-      wireOverlayCard(card, `/listen-later/${encodeURIComponent(card.dataset.spotifyId)}`, 'inListenLater', 'Removed from Listen Later')
-    );
+    // Wire overlay cards (initial render)
+    wireOverlayCards(document.getElementById('pf-grid-crate'),  'crate');
+    wireOverlayCards(document.getElementById('pf-grid-later'), 'later');
 
     // Follow button
     document.getElementById('up-follow-btn')?.addEventListener('click', async () => {

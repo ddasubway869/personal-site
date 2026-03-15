@@ -226,6 +226,8 @@ async function getDb() {
     'ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0',
     // Supporter flag — one-time $25 voluntary payment tier
     'ALTER TABLE users ADD COLUMN is_supporter INTEGER NOT NULL DEFAULT 0',
+    // Broad genre tag set by the member when submitting their pick
+    'ALTER TABLE albums ADD COLUMN genre TEXT',
     // Mark deandre as admin
     `UPDATE users SET is_admin = 1 WHERE email = 'arvl@deandreraheem.com'`,
     // Pinned posts

@@ -39,6 +39,7 @@ router.get('/:username', requireAuth, async (req, res) => {
                 a.artist,
                 a.cover_url    AS coverUrl,
                 a.release_year AS releaseYear,
+                a.genre,
                 r.note
          FROM   recommendations r
          JOIN   albums a ON a.id = r.album_id
@@ -51,7 +52,8 @@ router.get('/:username', requireAuth, async (req, res) => {
                 a.title,
                 a.artist,
                 a.cover_url    AS coverUrl,
-                a.release_year AS releaseYear
+                a.release_year AS releaseYear,
+                a.genre
          FROM   crates c
          JOIN   albums a ON a.id = c.album_id
          WHERE  c.user_id = ?
@@ -63,7 +65,8 @@ router.get('/:username', requireAuth, async (req, res) => {
                 a.title,
                 a.artist,
                 a.cover_url    AS coverUrl,
-                a.release_year AS releaseYear
+                a.release_year AS releaseYear,
+                a.genre
          FROM   listen_later ll
          JOIN   albums a ON a.id = ll.album_id
          WHERE  ll.user_id = ?

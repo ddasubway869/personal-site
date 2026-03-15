@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
-  <link rel="stylesheet" href="/style.css?v=102"/>
+  <link rel="stylesheet" href="/style.css?v=114"/>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -43,11 +43,24 @@
     </div>
   </div>
 
-  <script src="/js/common.js"></script>
+  <script src="/js/common.js?v=2"></script>
   <script>
   'use strict';
 
   const spotifyId = location.pathname.split('/').filter(Boolean).pop();
+
+  const SUBGENRES = {
+    'Hip-Hop':        ['Trap', 'Boom Bap', 'G-Funk', 'Drill', 'Conscious Rap', 'Mumble Rap', 'Lo-Fi Hip-Hop', 'Jazz Rap', 'Southern Rap', 'Crunk', 'Bounce', 'Emo Rap', 'Alternative', 'Experimental'],
+    'R&B / Soul':     ['Contemporary R&B', 'Neo-Soul', 'New Jack Swing', 'Hip-Hop Soul', 'Trap-Soul', 'Alternative R&B', 'Doo-Wop'],
+    'Pop':            ['Pop Rock', 'Electropop', 'Synth-Pop', 'Teen Pop', 'Dance-Pop', 'Disco-Pop', 'Indie Pop', 'Pop-R&B', 'Bedroom Pop', 'Traditional Pop'],
+    'Rock':           ['Classic Rock', 'Hard Rock', 'Punk Rock', 'Grunge', 'Post-Grunge', 'Alternative Rock', 'Indie Rock', 'Pop-Punk', 'Progressive Rock', 'Glam Rock', 'Electronic Rock', 'Post-Punk', 'New Wave', 'Shoegaze', 'Dream Pop', 'Math Rock'],
+    'Electronic':     ['House', 'Techno', 'Dubstep', 'Drum n Bass', 'Trance', 'Hardstyle', 'Experimental', 'Electro & Fusion'],
+    'Jazz':           ['Dixieland', 'Swing', 'Bebop', 'Cool Jazz', 'Hard Bop', 'Modal Jazz', 'Jazz Fusion', 'Smooth Jazz', 'Latin Jazz', 'Free Jazz', 'Neo-Bop'],
+    'Metal':          ['Thrash Metal', 'Death Metal', 'Black Metal', 'Progressive Metal', 'Metalcore', 'Groove Metal', 'Symphonic Metal', 'Nu Metal', 'Blackened Deathcore', 'Djent'],
+    'Classical':      ['Baroque', 'Classical', 'Romantic', 'Modernism & Avant-Garde', 'Minimalism', 'Contemporary Classical'],
+    'Folk & Country': ['Folk Rock', 'Indie Folk', 'Celtic Folk', 'Bluegrass', 'Anti-Folk', 'Folk Metal', 'Americana', 'Outlaw Country', 'Country Pop', 'Bro-Country', 'Red Dirt', 'Nashville Sound', 'Honky-Tonk'],
+    'World':          ['Afrobeats', 'Reggaeton', 'Salsa', 'Bachata', 'Regional Mexican', 'Bongo Flava', 'Worldbeat', 'K-Pop'],
+  };
 
   const thumbUpSvg = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><rect x="2" y="11" width="4" height="11" rx="1"/></svg>`;
 
@@ -134,6 +147,10 @@
         <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
       </button>`;
 
+    const genreDisplay = album.genre
+      ? (album.genre.includes(', ') ? album.genre.split(', ')[1] : album.genre)
+      : null;
+
     const main = document.getElementById('page-main');
     main.innerHTML = `
       <div class="ap-hero">
@@ -142,8 +159,26 @@
           <h1 class="ap-title">${esc(album.title)}</h1>
           <p class="ap-artist">${artistLinks}</p>
           ${album.releaseYear ? `<p class="ap-sub">${esc(album.releaseYear)}</p>` : ''}
+          ${genreDisplay
+            ? `<span class="genre-tag" id="ap-genre-display">${esc(genreDisplay)}</span>`
+            : (me ? `<button class="ap-tag-genre-btn" id="ap-tag-genre-btn">+ Tag Genre</button>` : '')}
         </div>
       </div>
+
+      ${!album.genre && me ? `
+      <div class="ap-genre-picker" id="ap-genre-picker" hidden>
+        <p class="ap-genre-picker-label">Select a genre for this album</p>
+        <div class="genre-pill-group" id="ap-gp-pills">
+          ${Object.keys(SUBGENRES).map(g => `<button type="button" class="genre-pill" data-genre="${esc(g)}">${esc(g)}</button>`).join('')}
+        </div>
+        <div class="genre-subfilters" id="ap-gp-subpills" style="display:none;margin-top:.5rem"></div>
+        <input type="hidden" id="ap-gp-value" value="">
+        <div class="ap-genre-picker-actions">
+          <button class="btn btn-solid" id="ap-gp-save" disabled>Save genre</button>
+          <button class="btn btn-ghost" id="ap-gp-cancel">Cancel</button>
+        </div>
+        <p class="form-status" id="ap-gp-status" aria-live="polite"></p>
+      </div>` : ''}
 
       <div class="ap-action-bar ap-stagger" style="animation-delay:160ms">
         <div class="ap-action-left">
@@ -297,6 +332,115 @@
 
     // Wire like buttons
     wireLikeBtns(main);
+
+    // ── Genre tagging ─────────────────────────────────────
+    if (!album.genre && me) {
+      const tagBtn    = document.getElementById('ap-tag-genre-btn');
+      const picker    = document.getElementById('ap-genre-picker');
+      const pillsEl   = document.getElementById('ap-gp-pills');
+      const subEl     = document.getElementById('ap-gp-subpills');
+      const valEl     = document.getElementById('ap-gp-value');
+      const saveBtn   = document.getElementById('ap-gp-save');
+      const cancelBtn = document.getElementById('ap-gp-cancel');
+      const statusEl  = document.getElementById('ap-gp-status');
+
+      tagBtn?.addEventListener('click', () => {
+        picker.hidden = false;
+        tagBtn.style.display = 'none';
+        picker.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+
+      cancelBtn?.addEventListener('click', () => {
+        picker.hidden = true;
+        tagBtn.style.display = '';
+        pillsEl.querySelectorAll('.genre-pill--active').forEach(p => p.classList.remove('genre-pill--active'));
+        subEl.innerHTML = '';
+        subEl.style.display = 'none';
+        valEl.value = '';
+        saveBtn.disabled = true;
+        statusEl.textContent = '';
+      });
+
+      pillsEl?.addEventListener('click', e => {
+        const pill = e.target.closest('.genre-pill');
+        if (!pill) return;
+        pillsEl.querySelectorAll('.genre-pill').forEach(p => p.classList.remove('genre-pill--active'));
+        pill.classList.add('genre-pill--active');
+        const core = pill.dataset.genre;
+        valEl.value = core;
+        saveBtn.disabled = false;
+        statusEl.textContent = '';
+        const subs = SUBGENRES[core] || [];
+        if (subs.length) {
+          subEl.innerHTML = subs.map(s =>
+            `<button type="button" class="genre-pill genre-pill--sub" data-subgenre="${esc(s)}">${esc(s)}</button>`
+          ).join('');
+          subEl.style.display = 'flex';
+          subEl.style.animation = 'none';
+          subEl.offsetHeight;
+          subEl.style.animation = '';
+        } else {
+          subEl.innerHTML = '';
+          subEl.style.display = 'none';
+        }
+      });
+
+      subEl?.addEventListener('click', e => {
+        const pill = e.target.closest('.genre-pill--sub');
+        if (!pill) return;
+        const core = pillsEl.querySelector('.genre-pill--active')?.dataset.genre || '';
+        if (pill.classList.contains('genre-pill--active')) {
+          pill.classList.remove('genre-pill--active');
+          valEl.value = core;
+        } else {
+          subEl.querySelectorAll('.genre-pill--sub').forEach(p => p.classList.remove('genre-pill--active'));
+          pill.classList.add('genre-pill--active');
+          valEl.value = core ? `${core}, ${pill.dataset.subgenre}` : pill.dataset.subgenre;
+        }
+      });
+
+      saveBtn?.addEventListener('click', async () => {
+        const genre = valEl.value.trim();
+        if (!genre) return;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+        try {
+          const r = await fetch(`/albums/${encodeURIComponent(spotifyId)}/genre`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ genre }),
+          });
+          const d = await r.json();
+          if (!r.ok) {
+            statusEl.textContent = d.error || 'Failed.';
+            statusEl.className = 'form-status err';
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save genre';
+            return;
+          }
+          if (d.alreadySet) {
+            showToast('Someone just tagged this album — showing their tag.');
+          }
+          // Replace button + picker with genre tag in meta
+          tagBtn?.remove();
+          picker?.remove();
+          const displayGenre = d.genre.includes(', ') ? d.genre.split(', ')[1] : d.genre;
+          const metaEl = document.querySelector('.ap-meta');
+          if (metaEl) {
+            const tag = document.createElement('span');
+            tag.className = 'genre-tag';
+            tag.id = 'ap-genre-display';
+            tag.textContent = displayGenre.toUpperCase();
+            metaEl.appendChild(tag);
+          }
+        } catch {
+          statusEl.textContent = 'Something went wrong.';
+          statusEl.className = 'form-status err';
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save genre';
+        }
+      });
+    }
 
     // ── Deezer 30-second track previews ──────────────────────
     let _previewAudio = null;
@@ -487,6 +631,7 @@
         const recBtn = document.getElementById('ap-rec-btn');
         if (recBtn) { recBtn.textContent = 'Your pick ✓'; recBtn.classList.add('btn-pick--active'); recBtn.disabled = true; }
         closePickModal();
+        showToast(`Picked!<span class="toast-sub">Resets in ${timeUntilReset()}</span>`, 3200);
       } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; }
       btn.disabled = false;
     }

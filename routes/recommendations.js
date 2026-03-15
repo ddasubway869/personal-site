@@ -44,11 +44,16 @@ function isoWeekKey(date = new Date()) {
   return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
 }
 
+const VALID_GENRES = new Set([
+  'Hip-Hop', 'R&B / Soul', 'Pop', 'Rock', 'Electronic',
+  'Jazz', 'Classical', 'Folk / Country', 'Metal', 'World',
+]);
+
 // ── POST /recommend ───────────────────────────────────────
-// Body: { spotifyId, title, artist, coverUrl, releaseYear, note? }
+// Body: { spotifyId, title, artist, coverUrl, releaseYear, note?, genre? }
 // One recommendation per logged-in user per ISO week.
 router.post('/', requireAuth, async (req, res) => {
-  const { spotifyId, title, artist, coverUrl, releaseYear, note: rawNote } = req.body;
+  const { spotifyId, title, artist, coverUrl, releaseYear, note: rawNote, genre: rawGenre } = req.body;
 
   if (!spotifyId || !title || !artist) {
     return res.status(400).json({ error: 'spotifyId, title and artist are required.' });
@@ -61,6 +66,9 @@ router.post('/', requireAuth, async (req, res) => {
 
   const _chk1 = note && checkContent(note);
   if (_chk1?.flagged) return res.status(400).json({ error: _chk1.message });
+
+  // genre is optional but must be from allowed list
+  const genre = (typeof rawGenre === 'string' && VALID_GENRES.has(rawGenre)) ? rawGenre : null;
 
   const weekKey = isoWeekKey();
 
@@ -82,14 +90,15 @@ router.post('/', requireAuth, async (req, res) => {
 
     // Upsert the album into our local cache
     await db.run(
-      `INSERT INTO albums (spotify_id, title, artist, cover_url, release_year)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO albums (spotify_id, title, artist, cover_url, release_year, genre)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(spotify_id) DO UPDATE
          SET title        = excluded.title,
              artist       = excluded.artist,
              cover_url    = excluded.cover_url,
-             release_year = excluded.release_year`,
-      finalSpotifyId, title, artist, coverUrl ?? null, releaseYear ?? null
+             release_year = excluded.release_year,
+             genre        = COALESCE(excluded.genre, albums.genre)`,
+      finalSpotifyId, title, artist, coverUrl ?? null, releaseYear ?? null, genre
     );
 
     const album = await db.get('SELECT id FROM albums WHERE spotify_id = ?', finalSpotifyId);
@@ -135,6 +144,7 @@ router.get('/', async (req, res) => {
               a.artist,
               a.cover_url    AS coverUrl,
               a.release_year AS releaseYear,
+              a.genre,
               COUNT(r.id)    AS count
        FROM   recommendations r
        JOIN   albums a ON a.id = r.album_id
@@ -165,6 +175,7 @@ router.get('/recent', async (req, res) => {
               a.artist,
               a.cover_url    AS coverUrl,
               a.release_year AS releaseYear,
+              a.genre,
               COUNT(r.id)    AS count
        FROM   recommendations r
        JOIN   albums a ON a.id = r.album_id
@@ -202,6 +213,7 @@ router.get('/me', requireAuth, async (req, res) => {
               a.artist,
               a.cover_url    AS coverUrl,
               a.release_year AS releaseYear,
+              a.genre,
               r.note         AS note
        FROM   recommendations r
        JOIN   albums a ON a.id = r.album_id

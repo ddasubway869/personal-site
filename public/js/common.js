@@ -16,13 +16,26 @@ function relativeTime(ts) {
 function showToast(msg, duration = 2800) {
   const t = document.createElement('div');
   t.className = 'toast';
-  t.textContent = msg;
+  t.innerHTML = msg;
   document.body.appendChild(t);
   requestAnimationFrame(() => t.classList.add('toast--visible'));
   setTimeout(() => {
     t.classList.remove('toast--visible');
     t.addEventListener('transitionend', () => t.remove(), { once: true });
   }, duration);
+}
+
+function timeUntilReset() {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun … 6=Sat
+  const daysUntil = day === 1 ? 7 : (8 - day) % 7;
+  const next = new Date(now);
+  next.setDate(now.getDate() + daysUntil);
+  next.setHours(0, 0, 0, 0);
+  const totalH = Math.floor((next - now) / 3600000);
+  const d = Math.floor(totalH / 24);
+  const h = totalH % 24;
+  return d > 0 ? `${d}d ${h}h` : `${h}h`;
 }
 
 // Apply saved theme immediately on script load

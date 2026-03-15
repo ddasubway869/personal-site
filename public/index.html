@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
   <script>if(sessionStorage.getItem('arvl_intro_done'))document.documentElement.classList.add('skip-intro');</script>
-  <link rel="stylesheet" href="style.css?v=102" />
+  <link rel="stylesheet" href="style.css?v=114" />
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -81,6 +81,20 @@
         <div class="section-hd">
           <h2 class="section-title">Also recommended this week</h2>
         </div>
+        <div class="genre-filters" id="genre-filters" hidden>
+          <button class="genre-filter-btn genre-filter-btn--active" data-genre="">All</button>
+          <button class="genre-filter-btn" data-genre="Hip-Hop">Hip-Hop</button>
+          <button class="genre-filter-btn" data-genre="R&B / Soul">R&amp;B / Soul</button>
+          <button class="genre-filter-btn" data-genre="Pop">Pop</button>
+          <button class="genre-filter-btn" data-genre="Rock">Rock</button>
+          <button class="genre-filter-btn" data-genre="Electronic">Electronic</button>
+          <button class="genre-filter-btn" data-genre="Jazz">Jazz</button>
+          <button class="genre-filter-btn" data-genre="Classical">Classical</button>
+          <button class="genre-filter-btn" data-genre="Folk & Country">Folk &amp; Country</button>
+          <button class="genre-filter-btn" data-genre="Metal">Metal</button>
+          <button class="genre-filter-btn" data-genre="World">World</button>
+        </div>
+        <div class="genre-subfilters" id="genre-subfilters" style="display:none"></div>
         <div id="recent-picks-list">
           <p class="empty-state">No picks yet — be the first!</p>
         </div>
@@ -166,6 +180,28 @@
       </button>
       <h2 class="modal-title" id="pick-note-title">Submit your pick</h2>
       <div class="pick-note-album-preview" id="pick-note-preview"></div>
+      <div id="pick-genre-wrap" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.75rem">
+        <div class="genre-card">
+          <p class="genre-card-label">Primary Genre</p>
+          <div class="genre-pill-group" id="pick-genre-pills">
+            <button type="button" class="genre-pill" data-genre="Hip-Hop">Hip-Hop</button>
+            <button type="button" class="genre-pill" data-genre="R&B / Soul">R&amp;B / Soul</button>
+            <button type="button" class="genre-pill" data-genre="Pop">Pop</button>
+            <button type="button" class="genre-pill" data-genre="Rock">Rock</button>
+            <button type="button" class="genre-pill" data-genre="Electronic">Electronic</button>
+            <button type="button" class="genre-pill" data-genre="Jazz">Jazz</button>
+            <button type="button" class="genre-pill" data-genre="Classical">Classical</button>
+            <button type="button" class="genre-pill" data-genre="Folk & Country">Folk &amp; Country</button>
+            <button type="button" class="genre-pill" data-genre="Metal">Metal</button>
+            <button type="button" class="genre-pill" data-genre="World">World</button>
+          </div>
+        </div>
+        <div class="genre-card" id="pick-subgenre-card" style="display:none">
+          <p class="genre-card-label">Sub-genre <span class="form-label-opt">(optional)</span></p>
+          <div class="genre-pill-group" id="pick-subgenre-pills"></div>
+        </div>
+        <input type="hidden" id="pick-genre-select" value="">
+      </div>
       <label class="form-label" for="pick-note-input">Tell us why <span class="form-label-opt">(optional)</span></label>
       <textarea class="pick-note-textarea" id="pick-note-input"
                 placeholder="What makes this album special?" maxlength="150" rows="3"></textarea>
@@ -212,7 +248,7 @@
     </div>
   </aside>
 
-  <script src="/js/common.js"></script>
+  <script src="/js/common.js?v=2"></script>
   <script>
     // ── Utilities ──────────────────────────────────────────
     function isoWeekKey(d = new Date()) {
@@ -360,7 +396,7 @@
     document.getElementById('sw-to-login').addEventListener('click',  () => { closeModal('modal-register'); openModal('modal-login'); });
 
     // ── Splash ─────────────────────────────────────────────
-    const SPLASH_KEY = 'arvl_splash_v1';
+    const SPLASH_KEY = 'arvl_splash_v2';
     function maybeShowSplash() {
       try {
         if (!localStorage.getItem(SPLASH_KEY)) setTimeout(() => openModal('modal-splash'), 600);
@@ -802,6 +838,7 @@
           </div>
           <div class="lb-card-footer">
             <span class="lb-card-count">${a.count} ${a.count === 1 ? 'pick' : 'picks'}</span>
+            ${a.genre ? `<span class="genre-tag">${esc(a.genre.includes(', ') ? a.genre.split(', ')[1] : a.genre)}</span>` : ''}
           </div>
         `;
         card.querySelector('.lb-card-btn').addEventListener('click', () => { location.href = '/album/' + a.spotifyId; });
@@ -874,15 +911,21 @@
       document.getElementById('pick-note-status').textContent = '';
       document.getElementById('pick-note-title').textContent = _pickNoteEditMode ? 'Edit your note' : 'Submit your pick';
       document.getElementById('pick-note-submit').textContent = _pickNoteEditMode ? 'Save note' : 'Submit pick';
+      // Reset and hide genre pills in edit mode (note-only edit)
+      document.getElementById('pick-genre-select').value = '';
+      document.querySelectorAll('.genre-pill').forEach(p => p.classList.remove('genre-pill--active'));
+      document.getElementById('pick-subgenre-card').style.display = 'none';
+      document.getElementById('pick-subgenre-pills').innerHTML = '';
+      document.getElementById('pick-genre-wrap').style.display = _pickNoteEditMode ? 'none' : 'flex';
       openModal('modal-pick-note');
     }
 
-    async function doRecommend(album, note = null) {
+    async function doRecommend(album, note = null, genre = null) {
       try {
         const r = await fetch('/recommendations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...album, note }),
+          body: JSON.stringify({ ...album, note, genre }),
         });
         const d = await r.json();
         if (!r.ok) { showToast(d.error || 'Error saving pick.', 'err'); return; }
@@ -891,11 +934,68 @@
         renderMyPick(album);
         rerenderPickButtons();
         loadLeaderboard();
-        showToast(`Picked "${album.title}"!`);
+        showToast(`Picked "${esc(album.title)}"!<span class="toast-sub">Resets in ${timeUntilReset()}</span>`);
       } catch {
         showToast('Error saving pick.', 'err');
       }
     }
+
+    const SUBGENRES = {
+      'Hip-Hop':        ['Trap', 'Boom Bap', 'G-Funk', 'Drill', 'Conscious Rap', 'Mumble Rap', 'Lo-Fi Hip-Hop', 'Jazz Rap', 'Southern Rap', 'Crunk', 'Bounce', 'Emo Rap', 'Alternative', 'Experimental'],
+      'R&B / Soul':     ['Contemporary R&B', 'Neo-Soul', 'New Jack Swing', 'Hip-Hop Soul', 'Trap-Soul', 'Alternative R&B', 'Doo-Wop'],
+      'Pop':            ['Pop Rock', 'Electropop', 'Synth-Pop', 'Teen Pop', 'Dance-Pop', 'Disco-Pop', 'Indie Pop', 'Pop-R&B', 'Bedroom Pop', 'Traditional Pop'],
+      'Rock':           ['Classic Rock', 'Hard Rock', 'Punk Rock', 'Grunge', 'Post-Grunge', 'Alternative Rock', 'Indie Rock', 'Pop-Punk', 'Progressive Rock', 'Glam Rock', 'Electronic Rock', 'Post-Punk', 'New Wave', 'Shoegaze', 'Dream Pop', 'Math Rock'],
+      'Electronic':     ['House', 'Techno', 'Dubstep', 'Drum n Bass', 'Trance', 'Hardstyle', 'Experimental', 'Electro & Fusion'],
+      'Jazz':           ['Dixieland', 'Swing', 'Bebop', 'Cool Jazz', 'Hard Bop', 'Modal Jazz', 'Jazz Fusion', 'Smooth Jazz', 'Latin Jazz', 'Free Jazz', 'Neo-Bop'],
+      'Metal':          ['Thrash Metal', 'Death Metal', 'Black Metal', 'Progressive Metal', 'Metalcore', 'Groove Metal', 'Symphonic Metal', 'Nu Metal', 'Blackened Deathcore', 'Djent'],
+      'Classical':      ['Baroque', 'Classical', 'Romantic', 'Modernism & Avant-Garde', 'Minimalism', 'Contemporary Classical'],
+      'Folk & Country': ['Folk Rock', 'Indie Folk', 'Celtic Folk', 'Bluegrass', 'Anti-Folk', 'Folk Metal', 'Americana', 'Outlaw Country', 'Country Pop', 'Bro-Country', 'Red Dirt', 'Nashville Sound', 'Honky-Tonk'],
+      'World':          ['Afrobeats', 'Reggaeton', 'Salsa', 'Bachata', 'Regional Mexican', 'Bongo Flava', 'Worldbeat', 'K-Pop'],
+    };
+
+    // Genre pill selection
+    document.getElementById('pick-genre-pills').addEventListener('click', e => {
+      const pill = e.target.closest('.genre-pill');
+      if (!pill) return;
+      document.querySelectorAll('#pick-genre-pills .genre-pill').forEach(p => p.classList.remove('genre-pill--active'));
+      pill.classList.add('genre-pill--active');
+      const core = pill.dataset.genre;
+      document.getElementById('pick-genre-select').value = core;
+      document.getElementById('pick-note-status').textContent = '';
+
+      // Show sub-genre card for this core genre
+      const subEl = document.getElementById('pick-subgenre-pills');
+      const card  = document.getElementById('pick-subgenre-card');
+      const subs  = SUBGENRES[core] || [];
+      // Clear any previously selected sub-genre
+      document.getElementById('pick-genre-select').value = core;
+      if (subs.length) {
+        subEl.innerHTML = subs.map(s =>
+          `<button type="button" class="genre-pill genre-pill--sub" data-subgenre="${s}">${s}</button>`
+        ).join('');
+        card.style.display = '';
+        card.style.animation = 'none';
+        card.offsetHeight; // force reflow to re-trigger animation
+        card.style.animation = '';
+      } else {
+        subEl.innerHTML = '';
+        card.style.display = 'none';
+      }
+    });
+
+    document.getElementById('pick-subgenre-pills').addEventListener('click', e => {
+      const pill = e.target.closest('.genre-pill--sub');
+      if (!pill) return;
+      const core = document.querySelector('#pick-genre-pills .genre-pill--active')?.dataset.genre || '';
+      if (pill.classList.contains('genre-pill--active')) {
+        pill.classList.remove('genre-pill--active');
+        document.getElementById('pick-genre-select').value = core;
+      } else {
+        document.querySelectorAll('.genre-pill--sub').forEach(p => p.classList.remove('genre-pill--active'));
+        pill.classList.add('genre-pill--active');
+        document.getElementById('pick-genre-select').value = core ? `${core}, ${pill.dataset.subgenre}` : pill.dataset.subgenre;
+      }
+    });
 
     // Pick note modal wiring
     document.getElementById('pick-note-input').addEventListener('input', e => {
@@ -904,8 +1004,15 @@
     document.getElementById('pick-note-cancel').addEventListener('click', () => closeModal('modal-pick-note'));
     document.getElementById('pick-note-submit').addEventListener('click', async () => {
       const note   = document.getElementById('pick-note-input').value.trim() || null;
+      const genre  = document.getElementById('pick-genre-select').value || null;
       const btn    = document.getElementById('pick-note-submit');
       const status = document.getElementById('pick-note-status');
+      if (!_pickNoteEditMode && !genre) {
+        status.textContent = 'Please select a genre.';
+        status.className = 'form-status err';
+        btn.disabled = false;
+        return;
+      }
       btn.disabled = true;
       if (_pickNoteEditMode) {
         try {
@@ -922,7 +1029,7 @@
         } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; }
         btn.disabled = false;
       } else {
-        await doRecommend(_pendingPickAlbum, note);
+        await doRecommend(_pendingPickAlbum, note, genre);
         closeModal('modal-pick-note');
         btn.disabled = false;
       }
@@ -1326,12 +1433,81 @@
     }
 
     // ── Recent member picks ─────────────────────────────────
+    let _allRecentPicks = [];
+
     async function loadRecentPicks() {
       try {
         const r = await fetch('/recommendations/recent');
         const d = await r.json();
-        renderRecentPicks(d.picks || []);
+        _allRecentPicks = d.picks || [];
+        renderRecentPicks(_allRecentPicks);
+        initGenreFilters();
       } catch {}
+    }
+
+    function initGenreFilters() {
+      const hasGenre = _allRecentPicks.some(p => p.genre);
+      const filtersEl    = document.getElementById('genre-filters');
+      const subfiltersEl = document.getElementById('genre-subfilters');
+      if (!hasGenre) { filtersEl.hidden = true; subfiltersEl.style.display = 'none'; return; }
+      filtersEl.hidden = false;
+
+      // Hide genre buttons that have no picks
+      const usedGenres = new Set(_allRecentPicks.map(p => p.genre?.split(',')[0].trim()).filter(Boolean));
+      filtersEl.querySelectorAll('.genre-filter-btn[data-genre]').forEach(btn => {
+        if (btn.dataset.genre === '') return; // keep "All"
+        btn.style.display = usedGenres.has(btn.dataset.genre) ? '' : 'none';
+      });
+
+      let activeSubgenre = '';
+
+      filtersEl.querySelectorAll('.genre-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          filtersEl.querySelectorAll('.genre-filter-btn').forEach(b => b.classList.remove('genre-filter-btn--active'));
+          btn.classList.add('genre-filter-btn--active');
+          activeSubgenre = '';
+          const genre = btn.dataset.genre;
+
+          // Show only sub-genres that appear in actual picks for this genre
+          const usedSubs = genre
+            ? new Set(_allRecentPicks
+                .filter(p => p.genre && p.genre.startsWith(genre))
+                .map(p => { const parts = p.genre.split(', '); return parts[1] || null; })
+                .filter(Boolean))
+            : new Set();
+          const subs = genre ? (SUBGENRES[genre] || []).filter(s => usedSubs.has(s)) : [];
+          if (subs.length) {
+            subfiltersEl.innerHTML = subs.map(s =>
+              `<button class="genre-filter-btn genre-filter-btn--sub" data-subgenre="${s}">${s}</button>`
+            ).join('');
+            subfiltersEl.style.display = 'flex';
+            subfiltersEl.style.animation = 'none';
+            subfiltersEl.offsetHeight;
+            subfiltersEl.style.animation = '';
+            subfiltersEl.querySelectorAll('.genre-filter-btn--sub').forEach(sb => {
+              sb.addEventListener('click', () => {
+                subfiltersEl.querySelectorAll('.genre-filter-btn--sub').forEach(b => b.classList.remove('genre-filter-btn--active'));
+                if (activeSubgenre === sb.dataset.subgenre) {
+                  activeSubgenre = '';
+                } else {
+                  sb.classList.add('genre-filter-btn--active');
+                  activeSubgenre = sb.dataset.subgenre;
+                }
+                const filtered = activeSubgenre
+                  ? _allRecentPicks.filter(p => p.genre && p.genre.includes(activeSubgenre))
+                  : _allRecentPicks.filter(p => p.genre && (p.genre === genre || p.genre.startsWith(genre + ',')));
+                renderRecentPicks(filtered);
+              });
+            });
+          } else {
+            subfiltersEl.innerHTML = '';
+            subfiltersEl.style.display = 'none';
+          }
+
+          const filtered = genre ? _allRecentPicks.filter(p => p.genre === genre || (p.genre && p.genre.startsWith(genre + ','))) : _allRecentPicks;
+          renderRecentPicks(filtered);
+        });
+      });
     }
 
     function renderRecentPicks(picks) {
@@ -1365,6 +1541,7 @@
             <div class="rp-body">
               <p class="rp-title">${esc(p.title)}</p>
               <p class="rp-artist">${esc(p.artist)}</p>
+              ${p.genre ? `<span class="genre-tag">${esc(p.genre.includes(', ') ? p.genre.split(', ')[1] : p.genre)}</span>` : ''}
             </div>
           </div>
         `;
@@ -1517,6 +1694,10 @@
         <div class="splash-feature">
           <span class="splash-feature-label">Notifications</span>
           <span class="splash-feature-desc">Get notified when someone likes your picks, comments, or replies.</span>
+        </div>
+        <div class="splash-feature">
+          <span class="splash-feature-label">Genre Tags</span>
+          <span class="splash-feature-desc">Albums now have genre tags. The first member to pick or tag an album sets it for everyone. New picks get tagged in the flow — and if you've already picked something untagged, you can add it from the album page.</span>
         </div>
       </div>
       <p class="splash-footer">We're figuring this out as we go. Come experiment with us.</p>
