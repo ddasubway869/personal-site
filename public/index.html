@@ -1580,11 +1580,14 @@
       if (gated) {
         picks.slice(0, 6).forEach(p => grid.appendChild(makeCard(p)));
       } else {
-        [...picks, ...picks].forEach(p => grid.appendChild(makeCard(p)));
-        wrap.addEventListener('scroll', () => {
-          const half = wrap.scrollWidth / 2;
-          if (wrap.scrollLeft >= half) wrap.scrollLeft -= half;
-        });
+        const shouldLoop = picks.length >= 6;
+        (shouldLoop ? [...picks, ...picks] : picks).forEach(p => grid.appendChild(makeCard(p)));
+        if (shouldLoop) {
+          wrap.addEventListener('scroll', () => {
+            const half = wrap.scrollWidth / 2;
+            if (wrap.scrollLeft >= half) wrap.scrollLeft -= half;
+          });
+        }
       }
 
       wrap.appendChild(grid);
