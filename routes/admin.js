@@ -65,6 +65,14 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
     `),
   ]);
 
+  const picksByWeek = await db.all(`
+    SELECT week_key, COUNT(DISTINCT user_id) AS pickers, COUNT(*) AS total_picks
+    FROM   recommendations
+    GROUP  BY week_key
+    ORDER  BY week_key DESC
+    LIMIT  20
+  `);
+
   const secret = req.query.secret;
   const totalUsers      = users.length;
   const verifiedUsers   = users.filter(u => u.verified).length;
@@ -273,6 +281,27 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
       <div class="stat-value">${communityPosts.length}</div>
       <div class="stat-label">Community posts</div>
     </div>
+  </div>
+
+  <div style="margin:1.5rem 0 2rem">
+    <h3 style="font-size:.875rem;font-weight:600;margin-bottom:.75rem;">Picks by week</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem;">
+      <thead>
+        <tr style="text-align:left;border-bottom:1px solid var(--border,#333)">
+          <th style="padding:.4rem .75rem .4rem 0">Week</th>
+          <th style="padding:.4rem .75rem">Members picked</th>
+          <th style="padding:.4rem 0">Total picks</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${picksByWeek.map(w => `
+        <tr style="border-bottom:1px solid var(--border,#222)">
+          <td style="padding:.4rem .75rem .4rem 0">${w.week_key}</td>
+          <td style="padding:.4rem .75rem">${w.pickers}</td>
+          <td style="padding:.4rem 0">${w.total_picks}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
   </div>
 
   <div class="nav-tabs">
