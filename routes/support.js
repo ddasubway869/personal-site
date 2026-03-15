@@ -42,8 +42,8 @@ router.post('/checkout', async (req, res) => {
   }
 });
 
-// POST /support/webhook — Stripe webhook (raw body, mounted before express.json())
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+// POST /support/webhook — Stripe webhook (raw body applied in server.js before express.json())
+router.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 

@@ -36,8 +36,8 @@ async function start() {
 
   app.set('trust proxy', 1);
 
-  // Support routes mounted BEFORE express.json() so the webhook can read the raw body
-  app.use('/support', supportRoutes);
+  // Webhook needs raw body — apply before express.json() for that path only
+  app.use('/support/webhook', express.raw({ type: 'application/json' }));
 
   app.use(express.json());
   app.use(session({
@@ -77,6 +77,7 @@ async function start() {
     next();
   });
 
+  app.use('/support',         supportRoutes);
   app.use('/u',               userRoutes);
   app.use('/crate',           crateRoutes);
   app.use('/listen-later',    listenLaterRoutes);
