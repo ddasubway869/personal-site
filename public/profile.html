@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ARVL</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="ARVL"/>
+  <link rel="stylesheet" href="/style.css?v=102"/>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  </script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main class="page-container" id="page-main">
+    <p class="ap-loading">Loading…</p>
+  </main>
+  <script src="/js/common.js"></script>
+  <script>
+  'use strict';
+
+  const username = decodeURIComponent(location.pathname.split('/u/')[1] || '');
+
+  function overlayCard(a, removeTitle) {
+    return `
+      <div class="profile-card profile-card--crate"
+           data-spotify-id="${esc(a.spotifyId)}"
+           data-title="${esc(a.title)}"
+           data-artist="${esc(a.artist)}">
+        <div class="profile-card-cover-wrap">
+          <a href="/album/${esc(a.spotifyId)}" class="profile-card-cover" ${a.coverUrl ? `style="background-image:url('${esc(a.coverUrl)}')"` : ''}></a>
+          <div class="profile-card-overlay">
+            <button class="profile-card-btn profile-card-play-btn" title="Stream">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+            </button>
+            <button class="profile-card-btn profile-card-remove-btn" title="${removeTitle}">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="profile-card-body">
+          <p class="profile-card-title">${esc(a.title)}</p>
+          <p class="profile-card-artist">${esc(a.artist)}</p>
+        </div>
+      </div>`;
+  }
+
+  function albumGrid(albums, type, isSelf) {
+    if (!albums.length) return '<p class="cp-empty">Nothing here yet.</p>';
+    return `<div class="profile-grid">${albums.map(a => {
+      if (type === 'crate' && isSelf) return overlayCard(a, 'Remove from Collection');
+      if (type === 'later' && isSelf) return overlayCard(a, 'Remove from Listen Later');
+      return `
+        <a href="/album/${esc(a.spotifyId)}" class="profile-card">
+          <div class="profile-card-cover" ${a.coverUrl ? `style="background-image:url('${esc(a.coverUrl)}')"` : ''}></div>
+          <div class="profile-card-body">
+            <p class="profile-card-title">${esc(a.title)}</p>
+            <p class="profile-card-artist">${esc(a.artist)}</p>
+            ${type === 'picks' && a.note ? `<p class="profile-card-note">"${esc(a.note)}"</p>` : ''}
+          </div>
+        </a>`;
+    }).join('')}
+    </div>`;
+  }
+
+  function renderPage(data, me) {
+    document.title = `${data.username || username} — ARVL`;
+    // API returns createdAt, not memberSince
+    const joined = data.createdAt
+      ? new Date(data.createdAt * 1000).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+      : '';
+    const pickCount     = (data.picks || []).length;
+    const followerCount = data.followerCount ?? 0;
+    const initial       = (data.username || username || '?')[0].toUpperCase();
+
+    const main = document.getElementById('page-main');
+    main.innerHTML = `
+      <div class="up-profile-header up-profile-header--page">
+        <div class="up-avatar">${esc(initial)}</div>
+        <div class="up-profile-info">
+          <h1 class="up-username">${esc(data.username || username)}${data.isSupporter ? '<span class="supporter-star" title="ARVL Supporter">★</span>' : ''}</h1>
+          <p class="up-meta">
+            ${joined ? `Member since ${joined}` : ''}
+            ${pickCount ? ` · ${pickCount} ${pickCount === 1 ? 'pick' : 'picks'}` : ''}
+             · ${followerCount} ${followerCount === 1 ? 'follower' : 'followers'}
+          </p>
+        </div>
+      </div>
+      ${!data.isSelf && me ? `
+        <button class="btn up-follow-btn${data.isFollowing ? ' up-follow-btn--following' : ''}" id="up-follow-btn">
+          ${data.isFollowing ? 'Following' : 'Follow'}
+        </button>` : ''}
+      <nav class="ap-tabs" style="margin-top:1rem">
+        <button class="ap-tab-btn ap-tab-btn--active" data-tab="picks">Picks</button>
+        <button class="ap-tab-btn" data-tab="crate">Collection</button>
+        <button class="ap-tab-btn" data-tab="later">Listen Later</button>
+      </nav>
+      <div class="ap-tab-panel" id="up-tab-picks">${albumGrid(data.picks || [], 'picks', data.isSelf)}</div>
+      <div class="ap-tab-panel" id="up-tab-crate"  hidden>${albumGrid(data.crate || [], 'crate', data.isSelf)}</div>
+      <div class="ap-tab-panel" id="up-tab-later"  hidden>${albumGrid(data.listenLater || [], 'later', data.isSelf)}</div>
+    `;
+
+    // Tab switching
+    function showProfileTab(tab) {
+      document.querySelectorAll('.ap-tab-btn').forEach(b => b.classList.toggle('ap-tab-btn--active', b.dataset.tab === tab));
+      document.querySelectorAll('.ap-tab-panel').forEach(p => { p.hidden = (p.id !== `up-tab-${tab}`); });
+    }
+    document.querySelectorAll('.ap-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => showProfileTab(btn.dataset.tab));
+    });
+
+    // Activate tab from ?tab= query param
+    const tabParam = new URLSearchParams(location.search).get('tab');
+    if (tabParam) showProfileTab(tabParam);
+
+    // Wire overlay cards (crate + listen later)
+    let _pop = null;
+    const closePop = () => { if (_pop) { _pop.remove(); _pop = null; } };
+
+    function wireOverlayCard(card, removeUrl, removedKey, toastMsg) {
+      const { spotifyId, title, artist } = card.dataset;
+
+      card.querySelector('.profile-card-play-btn').addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        if (_pop) { closePop(); return; }
+        const spotifyHref    = `https://open.spotify.com/album/${spotifyId}`;
+        const appleMusicHref = `https://music.apple.com/us/search?term=${encodeURIComponent(title + ' ' + artist)}`;
+        const tidalHref      = `https://tidal.com/search/albums?q=${encodeURIComponent(title + ' ' + artist)}`;
+        const deezerHref     = `https://www.deezer.com/search/${encodeURIComponent((title + ' ' + artist).toLowerCase())}/album`;
+        const rect = e.currentTarget.getBoundingClientRect();
+        _pop = document.createElement('div');
+        _pop.className = 'stream-popover';
+        _pop.innerHTML = `
+          <a class="stream-option" href="${spotifyHref}"    target="_blank" rel="noopener">Spotify</a>
+          <a class="stream-option" href="${appleMusicHref}" target="_blank" rel="noopener">Apple Music</a>
+          <a class="stream-option" href="${tidalHref}"      target="_blank" rel="noopener">Tidal</a>
+          <a class="stream-option" href="${deezerHref}"     target="_blank" rel="noopener">Deezer</a>`;
+        _pop.style.top  = `${rect.bottom + 6}px`;
+        _pop.style.left = `${rect.left}px`;
+        document.body.appendChild(_pop);
+        setTimeout(() => document.addEventListener('click', closePop, { once: true }), 0);
+      });
+
+      card.querySelector('.profile-card-remove-btn').addEventListener('click', async e => {
+        e.preventDefault(); e.stopPropagation();
+        try {
+          const r = await fetch(removeUrl, { method: 'POST' });
+          if (!r.ok) return;
+          const d = await r.json();
+          if (!d[removedKey]) { card.remove(); showToast(toastMsg); }
+        } catch {}
+      });
+    }
+
+    document.querySelectorAll('#up-tab-crate .profile-card--crate').forEach(card =>
+      wireOverlayCard(card, `/crate/${encodeURIComponent(card.dataset.spotifyId)}`, 'inCrate', 'Removed from Collection')
+    );
+    document.querySelectorAll('#up-tab-later .profile-card--crate').forEach(card =>
+      wireOverlayCard(card, `/listen-later/${encodeURIComponent(card.dataset.spotifyId)}`, 'inListenLater', 'Removed from Listen Later')
+    );
+
+    // Follow button
+    document.getElementById('up-follow-btn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('up-follow-btn');
+      const r = await fetch(`/u/${encodeURIComponent(username)}/follow`, { method: 'POST' });
+      if (!r.ok) return;
+      const d = await r.json();
+      btn.textContent = d.following ? 'Following' : 'Follow';
+      btn.classList.toggle('up-follow-btn--following', d.following);
+    });
+  }
+
+  (async () => {
+    const me = await initHeader({ active: null });
+    try {
+      const r = await fetch(`/u/${encodeURIComponent(username)}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!r.ok) { document.getElementById('page-main').innerHTML = '<p class="cp-empty">User not found.</p>'; return; }
+      const data = await r.json();
+      renderPage(data, me);
+    } catch {
+      document.getElementById('page-main').innerHTML = '<p class="cp-empty">Failed to load profile.</p>';
+    }
+  })();
+  </script>
+</body>
+</html>

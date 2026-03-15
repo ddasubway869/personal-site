@@ -136,10 +136,102 @@ async function getDb() {
       created_at INTEGER NOT NULL DEFAULT (unixepoch()),
       UNIQUE(user_id, album_id, week_key)
     )`,
+    // User crate — saved albums (toggle, no week constraint)
+    `CREATE TABLE IF NOT EXISTS crates (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      album_id   INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(user_id, album_id)
+    )`,
+    // Listen later — private per-user watchlist (toggle, no week constraint)
+    `CREATE TABLE IF NOT EXISTS listen_later (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      album_id   INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(user_id, album_id)
+    )`,
+    // Community discussion board
+    `CREATE TABLE IF NOT EXISTS community_posts (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT    NOT NULL CHECK(length(body) <= 1000),
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_replies (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      post_id    INTEGER NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+      body       TEXT    NOT NULL CHECK(length(body) <= 1000),
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    // Threaded community replies
+    'ALTER TABLE community_replies ADD COLUMN parent_reply_id INTEGER REFERENCES community_replies(id) ON DELETE CASCADE',
     // Album detail cache — full track list + artists array from Spotify
     'ALTER TABLE albums ADD COLUMN tracks_json TEXT',
     'ALTER TABLE albums ADD COLUMN artists_json TEXT',
     'ALTER TABLE albums ADD COLUMN detail_cached_at INTEGER',
+    // Replies to album comments
+    `CREATE TABLE IF NOT EXISTS comment_replies (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+      body       TEXT    NOT NULL CHECK(length(body) <= 1000),
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )`,
+    // User-to-user follows
+    `CREATE TABLE IF NOT EXISTS user_follows (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      follower_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(follower_id, following_id)
+    )`,
+    // Likes on album comments
+    `CREATE TABLE IF NOT EXISTS comment_likes (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(user_id, comment_id)
+    )`,
+    // Likes on weekly pick notes
+    `CREATE TABLE IF NOT EXISTS recommendation_likes (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recommendation_id INTEGER NOT NULL REFERENCES recommendations(id) ON DELETE CASCADE,
+      created_at        INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(user_id, recommendation_id)
+    )`,
+    // Likes on community board posts
+    `CREATE TABLE IF NOT EXISTS community_post_likes (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      post_id    INTEGER NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(user_id, post_id)
+    )`,
+    // Post category (discussion, feature-request, bug, question)
+    `ALTER TABLE community_posts ADD COLUMN category TEXT NOT NULL DEFAULT 'discussion'`,
+    // Likes on community board replies
+    `CREATE TABLE IF NOT EXISTS community_reply_likes (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reply_id   INTEGER NOT NULL REFERENCES community_replies(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(user_id, reply_id)
+    )`,
+    // Admin flag on users
+    'ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0',
+    // Supporter flag — one-time $25 voluntary payment tier
+    'ALTER TABLE users ADD COLUMN is_supporter INTEGER NOT NULL DEFAULT 0',
+    // Mark deandre as admin
+    `UPDATE users SET is_admin = 1 WHERE email = 'arvl@deandreraheem.com'`,
+    // Pinned posts
+    'ALTER TABLE community_posts ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0',
+    // Admin-set status for bug reports / feature requests
+    'ALTER TABLE community_posts ADD COLUMN status TEXT',
   ]) {
     try { await _db.run(stmt); } catch { /* column already exists */ }
   }

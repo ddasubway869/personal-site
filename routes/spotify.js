@@ -6,23 +6,36 @@ const deezer                = require('../lib/deezer');
 const router = express.Router();
 
 // GET /search?q=<query>
+// Deezer is primary; Spotify is fallback (used only when Deezer fails).
 router.get('/', async (req, res) => {
   const q = (req.query.q || '').trim();
   if (!q) return res.status(400).json({ error: 'Query param `q` is required.' });
 
   try {
-    const { artists, albums } = await search(q);
-    res.json({ artists, albums });
-  } catch (err) {
-    // Spotify failed (rate limit or other error) — try Deezer as fallback
-    console.warn(`Spotify search failed (${err.message}), falling back to Deezer`);
+    const result = await deezer.search(q);
+    res.json(result);
+  } catch (dzErr) {
+    console.warn(`Deezer search failed (${dzErr.message}), falling back to Spotify`);
     try {
-      const result = await deezer.search(q);
-      res.json({ ...result, _fallback: true });
-    } catch (dzErr) {
-      console.error('Deezer fallback also failed:', dzErr.message);
-      res.status(502).json({ error: 'Could not reach Spotify. Try again.' });
+      const { artists, albums } = await search(q);
+      res.json({ artists, albums, _spotify_fallback: true });
+    } catch (spErr) {
+      console.error('Spotify fallback also failed:', spErr.message);
+      res.status(502).json({ error: 'Search unavailable. Try again.' });
     }
+  }
+});
+
+// GET /search/spotify-resolve?q=<query>
+// Always hits Spotify directly — used for Spotify Connect ID resolution only.
+router.get('/spotify-resolve', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'Query param `q` is required.' });
+  try {
+    const { albums } = await search(q);
+    res.json({ albums });
+  } catch (err) {
+    res.status(502).json({ error: 'Spotify unavailable.' });
   }
 });
 

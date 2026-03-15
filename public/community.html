@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Community — ARVL</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="ARVL"/>
+  <link rel="stylesheet" href="/style.css?v=102" />
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  </script>
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header id="site-header"></header>
+
+  <!-- ── Community ──────────────────────────────────────── -->
+  <main class="cp-main">
+    <div class="cp-container">
+      <h1 class="cp-heading">Community</h1>
+
+      <!-- Top-level tabs: Feed | Discussion -->
+      <nav class="ap-tabs" id="cp-top-tabs" style="margin-bottom:.5rem">
+        <button class="ap-tab-btn" data-tab="feed">Feed</button>
+        <button class="ap-tab-btn ap-tab-btn--active" data-tab="discussion">Discussion</button>
+      </nav>
+
+      <!-- ── Feed tab ──────────────────────────────────── -->
+      <div id="cp-tab-feed" hidden>
+        <div class="cp-feed" id="cp-activity-feed">
+          <p class="cp-loading">Loading…</p>
+        </div>
+      </div>
+
+      <!-- ── Discussion tab ────────────────────────────── -->
+      <div id="cp-tab-discussion">
+        <!-- Compose box -->
+        <form class="cp-compose" id="cp-compose">
+          <textarea class="cp-compose-input" id="cp-compose-input"
+                    placeholder="What's on your mind?" maxlength="1000" rows="3"></textarea>
+          <div class="cp-compose-footer">
+            <select class="cp-category-select" id="cp-category-select">
+              <option value="discussion">Discussion</option>
+              <option value="feature-request">Feature Request</option>
+              <option value="bug">Bug Report</option>
+              <option value="question">Question</option>
+              <option value="feedback">Feedback</option>
+            </select>
+            <span class="cp-char-count" id="cp-char-count">1000</span>
+            <button type="submit" class="btn btn-solid">Post</button>
+          </div>
+          <p class="form-status" id="cp-compose-status" aria-live="polite"></p>
+        </form>
+
+        <!-- Filter bar -->
+        <div class="cp-filters" id="cp-filters">
+          <button class="cp-filter-btn cp-filter-btn--active" data-cat="">All</button>
+          <button class="cp-filter-btn" data-cat="discussion">Discussion</button>
+          <button class="cp-filter-btn" data-cat="feature-request">Feature Request</button>
+          <button class="cp-filter-btn" data-cat="bug">Bug Report</button>
+          <button class="cp-filter-btn" data-cat="question">Question</button>
+          <button class="cp-filter-btn" data-cat="feedback">Feedback</button>
+          <button class="cp-filter-btn cp-filter-btn--admin" data-cat="admin-replied">Admin Replied</button>
+        </div>
+
+        <!-- Discussion posts -->
+        <div class="cp-feed" id="cp-feed">
+          <p class="cp-loading">Loading…</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/common.js"></script>
+  <script>
+  'use strict';
+
+  let me = null;
+
+  const thumbUpSvg = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><rect x="2" y="11" width="4" height="11" rx="1"/></svg>`;
+
+  function likeBtn(url, count, isLiked) {
+    if (me) {
+      return `<button class="btn-like${isLiked ? ' btn-like--active' : ''}" data-like-url="${url}" data-like-count="${count||0}" data-liked="${isLiked?'1':'0'}" aria-label="Like">${thumbUpSvg}<span class="btn-like-count">${count > 0 ? count : ''}</span></button>`;
+    }
+    return count > 0 ? `<span class="cp-like-count-static">${count}</span>` : '';
+  }
+
+  function wireLikeBtns(container) {
+    container.querySelectorAll('.btn-like').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const url      = btn.dataset.likeUrl;
+        const liked    = btn.dataset.liked === '1';
+        const count    = parseInt(btn.dataset.likeCount, 10) || 0;
+        const newLiked = !liked;
+        const newCount = newLiked ? count + 1 : Math.max(0, count - 1);
+        btn.dataset.liked     = newLiked ? '1' : '0';
+        btn.dataset.likeCount = newCount;
+        btn.classList.toggle('btn-like--active', newLiked);
+        btn.querySelector('.btn-like-count').textContent = newCount > 0 ? newCount : '';
+        try {
+          const r = await fetch(url, { method: 'POST' });
+          if (!r.ok) throw new Error();
+          const d = await r.json();
+          btn.dataset.liked     = d.liked ? '1' : '0';
+          btn.dataset.likeCount = d.count;
+          btn.classList.toggle('btn-like--active', d.liked);
+          btn.querySelector('.btn-like-count').textContent = d.count > 0 ? d.count : '';
+        } catch {
+          btn.dataset.liked     = liked ? '1' : '0';
+          btn.dataset.likeCount = count;
+          btn.classList.toggle('btn-like--active', liked);
+          btn.querySelector('.btn-like-count').textContent = count > 0 ? count : '';
+        }
+      });
+    });
+  }
+
+  // ── Render helpers ─────────────────────────────────────────
+  function childReplyHtml(r) {
+    return `
+      <div class="cp-reply cp-reply--child" data-id="${r.id}">
+        <div class="cp-post-meta">
+          <a href="/u/${esc(r.username)}" class="username-link cp-username">${esc(r.username)}</a>
+          <span class="cp-time">${relativeTime(r.createdAt)}</span>
+        </div>
+        <p class="cp-reply-body">${esc(r.body)}</p>
+        <div class="cp-thread-actions">
+          ${me ? `<button class="cp-reply-mention-btn" data-reply-id="${r.id}" data-username="${esc(r.username)}">Reply</button>` : ''}
+          ${likeBtn(`/likes/replies/${r.id}`, r.likeCount, r.isLiked)}
+        </div>
+      </div>`;
+  }
+
+  function threadHtml(parent, children, postId) {
+    const hasChildren = children.length > 0;
+    return `
+      <div class="cp-thread" data-reply-id="${parent.id}">
+        <div class="cp-reply cp-reply--top" data-id="${parent.id}">
+          <div class="cp-post-meta">
+            <a href="/u/${esc(parent.username)}" class="username-link cp-username">${esc(parent.username)}</a>
+            <span class="cp-time">${relativeTime(parent.createdAt)}</span>
+          </div>
+          <p class="cp-reply-body">${esc(parent.body)}</p>
+          <div class="cp-thread-actions">
+            <button class="cp-reply-mention-btn" data-reply-id="${parent.id}" data-username="${esc(parent.username)}">Reply</button>
+            ${hasChildren ? `<button class="cp-thread-toggle" data-collapsed="false">Collapse</button>` : ''}
+            ${likeBtn(`/likes/replies/${parent.id}`, parent.likeCount, parent.isLiked)}
+          </div>
+        </div>
+        <div class="cp-thread-children">
+          ${children.map(c => childReplyHtml(c)).join('')}
+          <form class="cp-thread-reply-form" data-post-id="${postId}" data-parent-reply-id="${parent.id}" hidden>
+            <textarea class="cp-reply-input" placeholder="Reply…" maxlength="1000" rows="2"></textarea>
+            <div class="cp-reply-form-footer">
+              <button type="submit" class="btn btn-solid cp-reply-submit">Reply</button>
+              <button type="button" class="cp-thread-cancel-btn">Cancel</button>
+              <p class="form-status cp-reply-status" aria-live="polite"></p>
+            </div>
+          </form>
+        </div>
+      </div>`;
+  }
+
+  function topLevelFormHtml(postId) {
+    return `
+      <form class="cp-reply-form" data-post-id="${postId}">
+        <textarea class="cp-reply-input" placeholder="Reply…" maxlength="1000" rows="2"></textarea>
+        <div class="cp-reply-form-footer">
+          <button type="submit" class="btn btn-solid cp-reply-submit">Reply</button>
+          <p class="form-status cp-reply-status" aria-live="polite"></p>
+        </div>
+      </form>`;
+  }
+
+  const CAT_LABELS = {
+    'discussion':     'Discussion',
+    'feature-request':'Feature Request',
+    'bug':            'Bug Report',
+    'question':       'Question',
+    'feedback':       'Feedback',
+  };
+
+  function postHtml(p) {
+    const count  = p.replyCount || 0;
+    const label  = count === 1 ? '1 reply' : `${count} replies`;
+    const cat    = p.category || 'discussion';
+    const pinned = !!p.pinned;
+    const status = p.status || null;
+    const STATUS_LABELS = { planned: 'Planned', resolved: 'Resolved', declined: 'Declined' };
+    return `
+      <article class="cp-post${pinned ? ' cp-post--pinned' : ''}" data-id="${p.id}" data-pinned="${pinned ? '1' : '0'}">
+        <div class="cp-post-meta">
+          <a href="/u/${esc(p.username)}" class="username-link cp-username">${esc(p.username)}${p.isSupporter ? '<span class="supporter-star" title="ARVL Supporter">★</span>' : ''}</a>
+          <span class="cp-time">${relativeTime(p.createdAt)}</span>
+          <span class="cp-cat-badge cp-cat-badge--${cat}">${CAT_LABELS[cat] || cat}</span>
+          ${pinned ? '<span class="cp-pin-badge">Pinned</span>' : ''}
+          ${status ? `<span class="cp-status-badge cp-status-badge--${status}">${STATUS_LABELS[status]}</span>` : ''}
+          ${p.hasAdminReply ? '<span class="cp-admin-reply-badge">Admin replied</span>' : ''}
+        </div>
+        <p class="cp-post-body">${esc(p.body)}</p>
+        <div class="cp-post-actions">
+          <button class="cp-reply-toggle" data-id="${p.id}">${label}</button>
+          ${me ? `<button class="cp-post-reply-btn" data-id="${p.id}" data-username="${esc(p.username)}">Reply</button>` : ''}
+          ${likeBtn(`/likes/posts/${p.id}`, p.likeCount, p.isLiked)}
+          ${me?.isAdmin ? `
+            <div class="cp-admin-actions">
+              <button class="cp-pin-btn" data-id="${p.id}">${pinned ? 'Unpin' : 'Pin'}</button>
+              <select class="cp-status-select" data-id="${p.id}">
+                <option value="">Status…</option>
+                <option value="planned"  ${status === 'planned'  ? 'selected' : ''}>Planned</option>
+                <option value="resolved" ${status === 'resolved' ? 'selected' : ''}>Resolved</option>
+                <option value="declined" ${status === 'declined' ? 'selected' : ''}>Declined</option>
+              </select>
+              <button class="cp-delete-btn" data-id="${p.id}">Delete</button>
+            </div>
+          ` : ''}
+        </div>
+        <form class="cp-post-inline-reply" data-post-id="${p.id}" hidden>
+          <textarea class="cp-reply-input" placeholder="Reply…" maxlength="1000" rows="2"></textarea>
+          <div class="cp-reply-form-footer">
+            <button type="submit" class="btn btn-solid cp-reply-submit">Reply</button>
+            <button type="button" class="cp-thread-cancel-btn cp-post-reply-cancel">Cancel</button>
+            <p class="form-status cp-reply-status" aria-live="polite"></p>
+          </div>
+        </form>
+        <div class="cp-replies" id="cp-replies-${p.id}" hidden></div>
+      </article>`;
+  }
+
+  // ── Build threads from flat reply list ─────────────────────
+  function buildThreads(replies) {
+    const byId = {};
+    const tops = [];
+    replies.forEach(r => { byId[r.id] = { ...r, children: [] }; });
+    replies.forEach(r => {
+      if (r.parentReplyId && byId[r.parentReplyId]) {
+        byId[r.parentReplyId].children.push(byId[r.id]);
+      } else {
+        tops.push(byId[r.id]);
+      }
+    });
+    return tops;
+  }
+
+  // ── Wire thread collapse/expand ────────────────────────────
+  function wireThreadToggles(container) {
+    container.querySelectorAll('.cp-thread-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const collapsed = btn.dataset.collapsed === 'true';
+        const children  = btn.closest('.cp-thread')?.querySelector('.cp-thread-children');
+        if (!children) return;
+        children.hidden      = !collapsed;
+        btn.dataset.collapsed = !collapsed;
+        btn.textContent       = collapsed ? 'Collapse' : 'Expand';
+      });
+    });
+  }
+
+  // ── Wire Reply buttons (show inline thread form) ───────────
+  function wireReplyBtns(container) {
+    container.querySelectorAll('.cp-reply-mention-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const thread = btn.closest('.cp-thread');
+        if (!thread) return;
+        const form     = thread.querySelector('.cp-thread-reply-form');
+        const children = thread.querySelector('.cp-thread-children');
+        if (!form) return;
+        // Show children if collapsed
+        if (children) children.hidden = false;
+        const toggle = thread.querySelector('.cp-thread-toggle');
+        if (toggle) { toggle.dataset.collapsed = 'false'; toggle.textContent = 'Collapse'; }
+        form.hidden = false;
+        const textarea = form.querySelector('.cp-reply-input');
+        const prefix   = `@${btn.dataset.username} `;
+        if (textarea && !textarea.value.startsWith(prefix)) textarea.value = prefix;
+        textarea?.focus();
+      });
+    });
+  }
+
+  // ── Wire thread reply forms ────────────────────────────────
+  function wireThreadForms(container, toggleBtn) {
+    container.querySelectorAll('.cp-thread-reply-form').forEach(form => {
+      // Cancel button
+      form.querySelector('.cp-thread-cancel-btn')?.addEventListener('click', () => {
+        form.hidden = true;
+        form.querySelector('.cp-reply-input').value = '';
+      });
+
+      form.addEventListener('submit', async e => {
+        e.preventDefault();
+        const postId        = form.dataset.postId;
+        const parentReplyId = form.dataset.parentReplyId;
+        const input         = form.querySelector('.cp-reply-input');
+        const status        = form.querySelector('.cp-reply-status');
+        const submit        = form.querySelector('.cp-reply-submit');
+        const body          = input.value.trim();
+        if (!body) return;
+
+        submit.disabled    = true;
+        submit.textContent = 'Posting…';
+        status.textContent = '';
+
+        try {
+          const r = await fetch(`/community/posts/${postId}/reply`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ body, parentReplyId }),
+          });
+          const d = await r.json();
+          if (!r.ok) { status.textContent = d.error || 'Failed.'; status.className += ' err'; return; }
+
+          const div = document.createElement('div');
+          div.innerHTML = childReplyHtml(d.reply);
+          const newChild = div.firstElementChild;
+          form.parentElement.insertBefore(newChild, form);
+          wireLikeBtns(newChild);
+          wireReplyBtns(newChild);
+          input.value = '';
+          form.hidden = true;
+
+          // Update reply count on toggle button
+          if (toggleBtn) {
+            const count = container.querySelectorAll('.cp-reply').length;
+            toggleBtn.textContent = count === 1 ? '1 reply' : `${count} replies`;
+          }
+          // Add collapse button to thread if it's the first child reply
+          const thread = form.closest('.cp-thread');
+          if (thread && !thread.querySelector('.cp-thread-toggle')) {
+            const actions = thread.querySelector('.cp-thread-actions');
+            const collapseBtn = document.createElement('button');
+            collapseBtn.className = 'cp-thread-toggle';
+            collapseBtn.dataset.collapsed = 'false';
+            collapseBtn.textContent = 'Collapse';
+            actions?.appendChild(collapseBtn);
+            wireThreadToggles(thread);
+          }
+        } catch {
+          status.textContent = 'Failed.'; status.className += ' err';
+        } finally {
+          submit.disabled = false; submit.textContent = 'Reply';
+        }
+      });
+    });
+  }
+
+  // ── Load replies for a post (shared by toggle + deep-link handler) ───
+  async function loadReplies(postId, repliesEl, toggleBtn) {
+    if (repliesEl.dataset.loaded) return;
+    repliesEl.innerHTML = '<p class="cp-loading" style="padding:.5rem 0">Loading…</p>';
+    repliesEl.hidden = false;
+    try {
+      const r = await fetch(`/community/posts/${postId}/replies`);
+      const d = await r.json();
+      const threads = buildThreads(d.replies || []);
+      repliesEl.innerHTML = threads.map(t => threadHtml(t, t.children, postId)).join('') + topLevelFormHtml(postId);
+      wireTopLevelForm(repliesEl.querySelector('.cp-reply-form'), toggleBtn, repliesEl, postId);
+      wireThreadToggles(repliesEl);
+      wireReplyBtns(repliesEl);
+      wireThreadForms(repliesEl, toggleBtn);
+      wireLikeBtns(repliesEl);
+      repliesEl.dataset.loaded = '1';
+    } catch {
+      repliesEl.innerHTML = '<p class="cp-loading" style="padding:.5rem 0">Failed to load replies.</p>';
+      repliesEl.hidden = true;
+    }
+  }
+
+  // ── Wire reply toggle ──────────────────────────────────────
+  function wireReplyToggle(btn) {
+    btn.addEventListener('click', async () => {
+      const postId    = btn.dataset.id;
+      const repliesEl = document.getElementById(`cp-replies-${postId}`);
+      if (!repliesEl) return;
+      if (!repliesEl.hidden) { repliesEl.hidden = true; return; }
+      await loadReplies(postId, repliesEl, btn);
+    });
+  }
+
+  // ── Wire inline post-level reply button + form ────────────
+  function wirePostInlineReply(article) {
+    const btn    = article.querySelector('.cp-post-reply-btn');
+    const form   = article.querySelector('.cp-post-inline-reply');
+    if (!btn || !form) return;
+
+    btn.addEventListener('click', () => {
+      form.hidden = !form.hidden;
+      if (!form.hidden) {
+        const textarea = form.querySelector('.cp-reply-input');
+        const username = btn.dataset.username;
+        const prefix   = username ? `@${username} ` : '';
+        if (textarea && prefix && !textarea.value.startsWith(prefix)) textarea.value = prefix;
+        textarea?.focus();
+      }
+    });
+
+    form.querySelector('.cp-post-reply-cancel')?.addEventListener('click', () => {
+      form.hidden = true;
+      form.querySelector('.cp-reply-input').value = '';
+      form.querySelector('.cp-reply-status').textContent = '';
+    });
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const postId = form.dataset.postId;
+      const input  = form.querySelector('.cp-reply-input');
+      const status = form.querySelector('.cp-reply-status');
+      const submit = form.querySelector('.cp-reply-submit');
+      const body   = input.value.trim();
+      if (!body) return;
+
+      submit.disabled = true; submit.textContent = 'Posting…';
+      status.textContent = ''; status.className = 'form-status cp-reply-status';
+
+      try {
+        const r = await fetch(`/community/posts/${postId}/reply`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body }),
+        });
+        const d = await r.json();
+        if (!r.ok) { status.textContent = d.error || 'Failed.'; status.className += ' err'; return; }
+
+        // Update reply count
+        const toggleBtn = article.querySelector('.cp-reply-toggle');
+        const repliesEl = document.getElementById(`cp-replies-${postId}`);
+        const newCount  = (parseInt(toggleBtn?.dataset?.replyCount ?? '0', 10) || 0) + 1;
+        if (toggleBtn) {
+          toggleBtn.dataset.replyCount = newCount;
+          toggleBtn.textContent = newCount === 1 ? '1 reply' : `${newCount} replies`;
+        }
+
+        // If replies already expanded, append the new thread
+        if (repliesEl && !repliesEl.hidden && repliesEl.dataset.loaded) {
+          const div = document.createElement('div');
+          div.innerHTML = threadHtml({ ...d.reply, children: [] }, [], postId);
+          const newThread = div.firstElementChild;
+          const existingForm = repliesEl.querySelector('.cp-reply-form');
+          repliesEl.insertBefore(newThread, existingForm || null);
+          wireReplyBtns(newThread);
+          wireThreadForms(newThread, toggleBtn);
+          wireLikeBtns(newThread);
+        }
+
+        input.value = '';
+        form.hidden = true;
+      } catch {
+        status.textContent = 'Failed.'; status.className += ' err';
+      } finally {
+        submit.disabled = false; submit.textContent = 'Reply';
+      }
+    });
+  }
+
+  // ── Wire top-level reply form ──────────────────────────────
+  function wireTopLevelForm(form, toggleBtn, repliesEl, postId) {
+    if (!form) return;
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const input  = form.querySelector('.cp-reply-input');
+      const status = form.querySelector('.cp-reply-status');
+      const submit = form.querySelector('.cp-reply-submit');
+      const body   = input.value.trim();
+      if (!body) return;
+
+      submit.disabled = true; submit.textContent = 'Posting…';
+      status.textContent = ''; status.className = 'form-status cp-reply-status';
+
+      try {
+        const r = await fetch(`/community/posts/${postId}/reply`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body }),
+        });
+        const d = await r.json();
+        if (!r.ok) { status.textContent = d.error || 'Failed.'; status.className += ' err'; return; }
+
+        // New top-level reply becomes a new thread
+        const div = document.createElement('div');
+        div.innerHTML = threadHtml({ ...d.reply, children: [] }, [], postId);
+        const newThread = div.firstElementChild;
+        form.parentElement.insertBefore(newThread, form);
+        wireReplyBtns(newThread);
+        wireThreadForms(newThread, toggleBtn);
+        wireLikeBtns(newThread);
+        input.value = '';
+
+        const count = repliesEl.querySelectorAll('.cp-thread').length;
+        if (toggleBtn) toggleBtn.textContent = count === 1 ? '1 reply' : `${count} replies`;
+      } catch {
+        status.textContent = 'Failed.'; status.className += ' err';
+      } finally {
+        submit.disabled = false; submit.textContent = 'Reply';
+      }
+    });
+  }
+
+  // ── Wire pin buttons (admin only) ─────────────────────────
+  function wirePinBtns(container) {
+    container.querySelectorAll('.cp-pin-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const postId  = btn.dataset.id;
+        const article = btn.closest('.cp-post');
+        try {
+          const r = await fetch(`/community/posts/${postId}/pin`, { method: 'POST' });
+          if (!r.ok) return;
+          const d = await r.json();
+          const nowPinned = !!d.pinned;
+          btn.textContent = nowPinned ? 'Unpin' : 'Pin';
+          article.dataset.pinned = nowPinned ? '1' : '0';
+          article.classList.toggle('cp-post--pinned', nowPinned);
+          // Update or remove pinned badge
+          let badge = article.querySelector('.cp-pin-badge');
+          if (nowPinned && !badge) {
+            badge = document.createElement('span');
+            badge.className = 'cp-pin-badge';
+            badge.textContent = 'Pinned';
+            article.querySelector('.cp-post-meta').appendChild(badge);
+          } else if (!nowPinned && badge) {
+            badge.remove();
+          }
+        } catch { /* silent */ }
+      });
+    });
+  }
+
+  // ── Wire status selects (admin only) ──────────────────────
+  function wireStatusSelects(container) {
+    container.querySelectorAll('.cp-status-select').forEach(sel => {
+      sel.addEventListener('change', async () => {
+        const postId  = sel.dataset.id;
+        const status  = sel.value || null;
+        const article = sel.closest('.cp-post');
+        try {
+          const r = await fetch(`/community/posts/${postId}/status`, {
+            method:  'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ status }),
+          });
+          if (!r.ok) { sel.value = sel.dataset.prev || ''; return; }
+          sel.dataset.prev = sel.value;
+          // Update or remove status badge in post meta
+          let badge = article.querySelector('.cp-status-badge');
+          if (status) {
+            const labels = { planned: 'Planned', resolved: 'Resolved', declined: 'Declined' };
+            if (!badge) {
+              badge = document.createElement('span');
+              const meta = article.querySelector('.cp-post-meta');
+              // Insert before the admin-reply badge (or append)
+              const adminBadge = meta.querySelector('.cp-admin-reply-badge');
+              meta.insertBefore(badge, adminBadge || null);
+            }
+            badge.className = `cp-status-badge cp-status-badge--${status}`;
+            badge.textContent = labels[status];
+          } else if (badge) {
+            badge.remove();
+          }
+        } catch { sel.value = sel.dataset.prev || ''; }
+      });
+      // Track initial value so we can revert on error
+      sel.dataset.prev = sel.value;
+    });
+  }
+
+  // ── Wire delete buttons (admin only) ──────────────────────
+  function wireDeleteBtns(container) {
+    container.querySelectorAll('.cp-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const postId  = btn.dataset.id;
+        const article = btn.closest('.cp-post');
+        if (!confirm('Delete this post and all its replies? This cannot be undone.')) return;
+        try {
+          const r = await fetch(`/community/posts/${postId}`, { method: 'DELETE' });
+          if (!r.ok) return;
+          article.remove();
+        } catch { /* silent */ }
+      });
+    });
+  }
+
+  // ── Render discussion feed ─────────────────────────────────
+  function renderFeed(posts) {
+    const feed = document.getElementById('cp-feed');
+    if (!posts.length) {
+      feed.innerHTML = '<p class="cp-empty">No posts yet. Be the first!</p>';
+      return;
+    }
+    feed.innerHTML = posts.map(postHtml).join('');
+    feed.querySelectorAll('.cp-reply-toggle').forEach(btn => wireReplyToggle(btn));
+    feed.querySelectorAll('.cp-post').forEach(a => wirePostInlineReply(a));
+    wireLikeBtns(feed);
+    wirePinBtns(feed);
+    wireStatusSelects(feed);
+    wireDeleteBtns(feed);
+  }
+
+  // ── Prepend new post ───────────────────────────────────────
+  function prependPost(post) {
+    const feed  = document.getElementById('cp-feed');
+    const empty = feed.querySelector('.cp-empty');
+    if (empty) empty.remove();
+
+    const div = document.createElement('div');
+    div.innerHTML = postHtml(post);
+    const article = div.firstElementChild;
+
+    // Insert after any pinned posts, not unconditionally at top
+    const pinned = feed.querySelectorAll('[data-pinned="1"]');
+    if (pinned.length) {
+      pinned[pinned.length - 1].insertAdjacentElement('afterend', article);
+    } else {
+      feed.prepend(article);
+    }
+    wireReplyToggle(article.querySelector('.cp-reply-toggle'));
+    wirePostInlineReply(article);
+    wireLikeBtns(article);
+    wirePinBtns(article);
+    wireStatusSelects(article);
+    wireDeleteBtns(article);
+  }
+
+  // ── Compose form ───────────────────────────────────────────
+  function wireComposeForm() {
+    const form    = document.getElementById('cp-compose');
+    const input   = document.getElementById('cp-compose-input');
+    const counter = document.getElementById('cp-char-count');
+    const status  = document.getElementById('cp-compose-status');
+
+    input.addEventListener('input', () => {
+      counter.textContent = 1000 - input.value.length;
+    });
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const body   = input.value.trim();
+      const submit = form.querySelector('[type=submit]');
+      if (!body) return;
+
+      submit.disabled    = true;
+      submit.textContent = 'Posting…';
+      status.textContent = '';
+      status.className   = 'form-status';
+
+      try {
+        const category = document.getElementById('cp-category-select')?.value || 'discussion';
+        const r = await fetch('/community/posts', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ body, category }),
+        });
+        const d = await r.json();
+        if (!r.ok) {
+          status.textContent = d.error || 'Failed to post.';
+          status.className  += ' err';
+          return;
+        }
+        input.value         = '';
+        counter.textContent = '1000';
+        prependPost(d.post);
+      } catch {
+        status.textContent = 'Failed to post.';
+        status.className  += ' err';
+      } finally {
+        submit.disabled    = false;
+        submit.textContent = 'Post';
+      }
+    });
+  }
+
+  // ── Filter bar ─────────────────────────────────────────────
+  let _activeFilter = '';
+  function wireFilterBtns() {
+    document.getElementById('cp-filters')?.querySelectorAll('.cp-filter-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        _activeFilter = btn.dataset.cat;
+        document.querySelectorAll('.cp-filter-btn').forEach(b =>
+          b.classList.toggle('cp-filter-btn--active', b === btn));
+        let url;
+        if (_activeFilter === 'admin-replied') url = '/community/posts?adminReplied=1';
+        else if (_activeFilter)                url = `/community/posts?category=${_activeFilter}`;
+        else                                   url = '/community/posts';
+        const feed = document.getElementById('cp-feed');
+        feed.innerHTML = '<p class="cp-loading">Loading…</p>';
+        try {
+          const r = await fetch(url);
+          const d = await r.json();
+          renderFeed(d.posts || []);
+        } catch { feed.innerHTML = '<p class="cp-empty">Failed to load.</p>'; }
+      });
+    });
+  }
+
+  // ── Load discussion posts ──────────────────────────────────
+  async function loadPosts() {
+    try {
+      const r = await fetch('/community/posts');
+      const d = await r.json();
+      renderFeed(d.posts || []);
+
+      // Handle ?post=123&reply=456 — open thread, scroll to exact reply
+      const params        = new URLSearchParams(location.search);
+      const targetPostId  = params.get('post');
+      const targetReplyId = params.get('reply');
+      if (targetPostId) {
+        showTab('discussion');
+        const postEl = document.querySelector(`article.cp-post[data-id="${CSS.escape(targetPostId)}"]`);
+        if (postEl) {
+          if (!targetReplyId) {
+            postEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            postEl.classList.add('cp-post--highlight');
+            setTimeout(() => postEl.classList.remove('cp-post--highlight'), 2000);
+          } else {
+            const repliesEl = document.getElementById(`cp-replies-${targetPostId}`);
+            const toggleBtn = postEl.querySelector('.cp-reply-toggle');
+            await loadReplies(targetPostId, repliesEl, toggleBtn);
+            const replyEl = repliesEl.querySelector(`.cp-reply[data-id="${CSS.escape(targetReplyId)}"]`);
+            if (replyEl) {
+              // Expand thread children if the target is a nested reply
+              const thread = replyEl.closest('.cp-thread');
+              if (thread) {
+                const children = thread.querySelector('.cp-thread-children');
+                if (children) children.hidden = false;
+                const collapseBtn = thread.querySelector('.cp-thread-toggle');
+                if (collapseBtn) { collapseBtn.dataset.collapsed = 'false'; collapseBtn.textContent = 'Collapse'; }
+              }
+              setTimeout(() => {
+                replyEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                replyEl.classList.add('cp-reply--highlight');
+                setTimeout(() => replyEl.classList.remove('cp-reply--highlight'), 2000);
+              }, 100);
+            } else {
+              postEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
+        }
+      }
+    } catch {
+      document.getElementById('cp-feed').innerHTML =
+        '<p class="cp-empty">Failed to load posts.</p>';
+    }
+  }
+
+  // ── Feed tab: activity from followed users ─────────────────
+  function fmtActivityItem(item) {
+    const coverStyle = item.coverUrl ? `background-image:url('${esc(item.coverUrl)}')` : '';
+    const albumLink  = `/album/${esc(item.spotifyId)}`;
+    const userLink   = `/u/${esc(item.username)}`;
+    const star       = item.isSupporter ? '<span class="supporter-star" title="ARVL Supporter">★</span>' : '';
+
+    if (item.type === 'pick') {
+      return `
+        <div class="cp-activity-item">
+          <p class="cp-activity-meta">
+            <a href="${userLink}" class="username-link">${esc(item.username)}${star}</a>
+            <span class="cp-activity-verb"> picked</span>
+            <span class="cp-time">${relativeTime(item.createdAt)}</span>
+          </p>
+          <a href="${albumLink}" class="cp-activity-album">
+            ${item.coverUrl ? `<div class="cp-activity-cover" style="${coverStyle}"></div>` : ''}
+            <div class="cp-activity-album-info">
+              <p class="cp-activity-title">${esc(item.title)}</p>
+              <p class="cp-activity-artist">${esc(item.artist)}</p>
+            </div>
+          </a>
+          ${item.note ? `<p class="cp-activity-note">"${esc(item.note)}"</p>` : ''}
+        </div>`;
+    }
+
+    if (item.type === 'collect') {
+      return `
+        <div class="cp-activity-item">
+          <p class="cp-activity-meta">
+            <a href="${userLink}" class="username-link">${esc(item.username)}${star}</a>
+            <span class="cp-activity-verb"> added to collection</span>
+            <span class="cp-time">${relativeTime(item.createdAt)}</span>
+          </p>
+          <a href="${albumLink}" class="cp-activity-album">
+            ${item.coverUrl ? `<div class="cp-activity-cover" style="${coverStyle}"></div>` : ''}
+            <div class="cp-activity-album-info">
+              <p class="cp-activity-title">${esc(item.title)}</p>
+              <p class="cp-activity-artist">${esc(item.artist)}</p>
+            </div>
+          </a>
+        </div>`;
+    }
+
+    if (item.type === 'comment') {
+      return `
+        <div class="cp-activity-item">
+          <p class="cp-activity-meta">
+            <a href="${userLink}" class="username-link">${esc(item.username)}${star}</a>
+            <span class="cp-activity-verb"> commented on</span>
+            <span class="cp-time">${relativeTime(item.createdAt)}</span>
+          </p>
+          <a href="${albumLink}" class="cp-activity-album">
+            ${item.coverUrl ? `<div class="cp-activity-cover" style="${coverStyle}"></div>` : ''}
+            <div class="cp-activity-album-info">
+              <p class="cp-activity-title">${esc(item.title)}</p>
+              <p class="cp-activity-artist">${esc(item.artist)}</p>
+            </div>
+          </a>
+        </div>`;
+    }
+
+    return '';
+  }
+
+  // Merge collect + comment items when the same user does both on the same album
+  function mergeCollectComments(items) {
+    const hasCollect = new Set();
+    const hasComment = new Set();
+    items.forEach(item => {
+      const key = `${item.username}|${item.spotifyId}`;
+      if (item.type === 'collect') hasCollect.add(key);
+      if (item.type === 'comment') hasComment.add(key);
+    });
+    const pairKeys = new Set([...hasCollect].filter(k => hasComment.has(k)));
+    if (!pairKeys.size) return items;
+
+    // Build merged data for each pair
+    const pairData = {};
+    items.forEach(item => {
+      const key = `${item.username}|${item.spotifyId}`;
+      if (!pairKeys.has(key)) return;
+      if (!pairData[key]) pairData[key] = { username: item.username, spotifyId: item.spotifyId,
+        title: item.title, artist: item.artist, coverUrl: item.coverUrl, createdAt: item.createdAt };
+      if (item.type === 'collect') pairData[key].createdAt = item.createdAt; // prefer collect timestamp
+      if (item.type === 'comment' && item.note) pairData[key].note = item.note;
+    });
+
+    // Rebuild list: first occurrence of a pair key → merged item; subsequent → skip
+    const seen = new Set();
+    return items.reduce((acc, item) => {
+      const key = `${item.username}|${item.spotifyId}`;
+      if (!pairKeys.has(key)) { acc.push(item); }
+      else if (!seen.has(key)) { seen.add(key); acc.push({ _group: 'collect-comment', ...pairData[key] }); }
+      return acc;
+    }, []);
+  }
+
+  function fmtCollectComment(item) {
+    const coverStyle = item.coverUrl ? `background-image:url('${esc(item.coverUrl)}')` : '';
+    const userLink   = `/u/${esc(item.username)}`;
+    const albumLink  = `/album/${esc(item.spotifyId)}`;
+    const star       = item.isSupporter ? '<span class="supporter-star" title="ARVL Supporter">★</span>' : '';
+    return `
+      <div class="cp-activity-item">
+        <p class="cp-activity-meta">
+          <a href="${userLink}" class="username-link">${esc(item.username)}${star}</a>
+          <span class="cp-activity-verb"> collected &amp; commented on</span>
+          <span class="cp-time">${relativeTime(item.createdAt)}</span>
+        </p>
+        <a href="${albumLink}" class="cp-activity-album">
+          ${item.coverUrl ? `<div class="cp-activity-cover" style="${coverStyle}"></div>` : ''}
+          <div class="cp-activity-album-info">
+            <p class="cp-activity-title">${esc(item.title)}</p>
+            <p class="cp-activity-artist">${esc(item.artist)}</p>
+          </div>
+        </a>
+        ${item.note ? `<p class="cp-activity-note">"${esc(item.note)}"</p>` : ''}
+      </div>`;
+  }
+
+  // Group consecutive collect items from same user on same UTC day
+  function groupCollects(items) {
+    const result = [];
+    let i = 0;
+    while (i < items.length) {
+      const item = items[i];
+      if (item.type !== 'collect') {
+        result.push(item);
+        i++;
+        continue;
+      }
+      // Collect consecutive collect items from same user on same UTC day
+      const itemDay = new Date(item.createdAt * 1000).toISOString().slice(0, 10);
+      const group = [item];
+      let j = i + 1;
+      while (j < items.length) {
+        const next = items[j];
+        if (next.type !== 'collect' || next.username !== item.username) break;
+        const nextDay = new Date(next.createdAt * 1000).toISOString().slice(0, 10);
+        if (nextDay !== itemDay) break;
+        group.push(next);
+        j++;
+      }
+      if (group.length === 1) {
+        result.push(item);
+      } else {
+        result.push({ _group: 'collect', username: item.username, isSupporter: item.isSupporter, createdAt: item.createdAt, albums: group });
+      }
+      i = j;
+    }
+    return result;
+  }
+
+  function fmtCollectGroup(g) {
+    const userLink = `/u/${esc(g.username)}`;
+    const star     = g.isSupporter ? '<span class="supporter-star" title="ARVL Supporter">★</span>' : '';
+    const covers = g.albums.map(a => {
+      const coverStyle = a.coverUrl ? `background-image:url('${esc(a.coverUrl)}')` : '';
+      return `<a href="/album/${esc(a.spotifyId)}" class="cp-activity-cover cp-activity-cover--sm" style="${coverStyle}" title="${esc(a.title)} — ${esc(a.artist)}"></a>`;
+    }).join('');
+    return `
+      <div class="cp-activity-item">
+        <p class="cp-activity-meta">
+          <a href="${userLink}" class="username-link">${esc(g.username)}${star}</a>
+          <span class="cp-activity-verb"> added ${g.albums.length} albums to collection</span>
+          <span class="cp-time">${relativeTime(g.createdAt)}</span>
+        </p>
+        <div class="cp-activity-cover-row">${covers}</div>
+      </div>`;
+  }
+
+  async function loadFeed() {
+    const feedEl = document.getElementById('cp-activity-feed');
+    try {
+      const r = await fetch('/community/feed');
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      const items = d.items || [];
+      if (!items.length) {
+        feedEl.innerHTML = '<p class="cp-empty">No activity yet. Follow some members to see their picks here.</p>';
+        return;
+      }
+      const grouped = groupCollects(mergeCollectComments(items));
+      feedEl.innerHTML = grouped.map(item => {
+        if (item._group === 'collect') return fmtCollectGroup(item);
+        if (item._group === 'collect-comment') return fmtCollectComment(item);
+        return fmtActivityItem(item);
+      }).join('');
+    } catch {
+      feedEl.innerHTML = '<p class="cp-empty">Failed to load feed.</p>';
+    }
+  }
+
+  // ── Tab switching ──────────────────────────────────────────
+  let feedLoaded = false;
+
+  function showTab(tab) {
+    const feedPanel = document.getElementById('cp-tab-feed');
+    const discPanel = document.getElementById('cp-tab-discussion');
+    document.querySelectorAll('#cp-top-tabs .ap-tab-btn').forEach(b => {
+      b.classList.toggle('ap-tab-btn--active', b.dataset.tab === tab);
+    });
+    feedPanel.hidden = (tab !== 'feed');
+    discPanel.hidden = (tab !== 'discussion');
+
+    if (tab === 'feed' && !feedLoaded) {
+      feedLoaded = true;
+      loadFeed();
+    }
+  }
+
+  document.querySelectorAll('#cp-top-tabs .ap-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => showTab(btn.dataset.tab));
+  });
+
+  // ── Init ───────────────────────────────────────────────────
+  (async () => {
+    me = await initHeader({ active: 'community' });
+    wireComposeForm();
+    wireFilterBtns();
+    await loadPosts();
+  })();
+  </script>
+</body>
+</html>

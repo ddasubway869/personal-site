@@ -178,10 +178,12 @@ router.post('/login', async (req, res) => {
 
     req.session.regenerate((err) => {
       if (err) return res.status(500).json({ error: 'Session error.' });
-      req.session.userId   = user.id;
-      req.session.email    = user.email;
-      req.session.username = user.username || user.email.split('@')[0];
-      res.json({ message: 'Logged in.', email: user.email, username: req.session.username });
+      req.session.userId      = user.id;
+      req.session.email       = user.email;
+      req.session.username    = user.username || user.email.split('@')[0];
+      req.session.isAdmin     = !!user.is_admin;
+      req.session.isSupporter = !!user.is_supporter;
+      res.json({ message: 'Logged in.', email: user.email, username: req.session.username, isAdmin: !!user.is_admin });
     });
   } catch (err) {
     console.error('Login error:', err.message);
@@ -201,9 +203,11 @@ router.post('/logout', (req, res) => {
 router.get('/me', (req, res) => {
   if (!req.session.userId) return res.status(401).json({ user: null });
   res.json({ user: {
-    id:       req.session.userId,
-    email:    req.session.email,
-    username: req.session.username || req.session.email?.split('@')[0],
+    id:          req.session.userId,
+    email:       req.session.email,
+    username:    req.session.username || req.session.email?.split('@')[0],
+    isAdmin:     !!req.session.isAdmin,
+    isSupporter: !!req.session.isSupporter,
   }});
 });
 

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" width="800" height="320">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@600&amp;display=swap');
+    </style>
+  </defs>
+
+  <!-- ── Dark variant (top) ── -->
+  <rect x="40" y="20" width="340" height="120" fill="#0d0d0d" rx="20"/>
+  <text
+    x="210" y="102"
+    font-family="'DM Sans', sans-serif"
+    font-weight="600"
+    font-size="64"
+    letter-spacing="-1.5"
+    fill="#f5f4f0"
+    text-anchor="middle"
+  >ARVL</text>
+
+  <!-- ── Light variant (top right) ── -->
+  <rect x="420" y="20" width="340" height="120" fill="#f5f4f0" rx="20"/>
+  <text
+    x="590" y="102"
+    font-family="'DM Sans', sans-serif"
+    font-weight="600"
+    font-size="64"
+    letter-spacing="-1.5"
+    fill="#0d0d0d"
+    text-anchor="middle"
+  >ARVL</text>
+
+  <!-- ── Transparent / dark text (bottom left) ── -->
+  <text
+    x="210" y="240"
+    font-family="'DM Sans', sans-serif"
+    font-weight="600"
+    font-size="64"
+    letter-spacing="-1.5"
+    fill="#0d0d0d"
+    text-anchor="middle"
+  >ARVL</text>
+  <text x="210" y="272" font-family="'DM Sans', sans-serif" font-size="13" fill="#999" text-anchor="middle">dark text — transparent bg</text>
+
+  <!-- ── Transparent / light text (bottom right) ── -->
+  <text
+    x="590" y="240"
+    font-family="'DM Sans', sans-serif"
+    font-weight="600"
+    font-size="64"
+    letter-spacing="-1.5"
+    fill="#f5f4f0"
+    text-anchor="middle"
+  >ARVL</text>
+  <text x="590" y="272" font-family="'DM Sans', sans-serif" font-size="13" fill="#999" text-anchor="middle">light text — transparent bg</text>
+
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@600&amp;display=swap');
+    </style>
+  </defs>
+  <rect width="400" height="400" fill="#0d0d0d" rx="80"/>
+  <text
+    x="200" y="220"
+    font-family="'DM Sans', sans-serif"
+    font-weight="600"
+    font-size="80"
+    letter-spacing="-2"
+    fill="#f5f4f0"
+    text-anchor="middle"
+    dominant-baseline="middle"
+  >ARVL</text>
+</svg>

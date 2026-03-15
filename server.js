@@ -15,7 +15,15 @@ const playerRoutes         = require('./routes/player');
 const feedbackRoutes       = require('./routes/feedback');
 const adminRoutes          = require('./routes/admin');
 const listenRoutes         = require('./routes/listens');
+const userRoutes           = require('./routes/users');
+const crateRoutes          = require('./routes/crate');
+const listenLaterRoutes    = require('./routes/listenLater');
+const communityRoutes      = require('./routes/community');
+const likesRoutes          = require('./routes/likes');
+const notifRoutes          = require('./routes/notifications');
 const scheduler            = require('./lib/scheduler');
+
+const supportRoutes         = require('./routes/support');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -27,6 +35,10 @@ async function start() {
   const SqliteStore = require('./lib/sessionStore')(session);
 
   app.set('trust proxy', 1);
+
+  // Support routes mounted BEFORE express.json() so the webhook can read the raw body
+  app.use('/support', supportRoutes);
+
   app.use(express.json());
   app.use(session({
     store:             new SqliteStore(),
@@ -53,6 +65,38 @@ async function start() {
   app.use('/feedback',        feedbackRoutes);
   app.use('/admin',           adminRoutes);
   app.use('/listens',         listenRoutes);
+
+  // New album page — no conflict with /albums/:id API (plural)
+  app.get('/album/:spotifyId', (_req, res) =>
+    res.sendFile(path.join(__dirname, 'public', 'album.html')));
+
+  // Content-negotiation: browser gets profile.html, fetch() gets JSON from userRoutes
+  app.get('/u/:username', (req, res, next) => {
+    if (req.headers['accept']?.includes('text/html'))
+      return res.sendFile(path.join(__dirname, 'public', 'profile.html'));
+    next();
+  });
+
+  app.use('/u',               userRoutes);
+  app.use('/crate',           crateRoutes);
+  app.use('/listen-later',    listenLaterRoutes);
+  // Community page — members only (must be before the API router)
+  app.get('/community', (req, res) => {
+    if (!req.session.userId) return res.redirect('/');
+    res.sendFile(path.join(__dirname, 'public', 'community.html'));
+  });
+
+  app.use('/community',       communityRoutes);
+  app.use('/likes',           likesRoutes);
+
+  // Content-negotiation: browser gets notifications.html, fetch() gets JSON from notifRoutes
+  app.get('/notifications', (req, res, next) => {
+    if (req.headers['accept']?.includes('text/html'))
+      return res.sendFile(path.join(__dirname, 'public', 'notifications.html'));
+    next();
+  });
+
+  app.use('/notifications',   notifRoutes);
 
   app.post('/contact', async (req, res) => {
     const { name, email, message } = req.body;

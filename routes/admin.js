@@ -11,12 +11,18 @@ function requireSecret(req, res, next) {
   next();
 }
 
-router.get('/dashboard', requireSecret, async (req, res) => {
+function requireAdmin(req, res, next) {
+  if (req.session?.isAdmin) return next();
+  if (req.query.secret === process.env.SESSION_SECRET) return next();
+  return res.status(403).send('Forbidden');
+}
+
+router.get('/dashboard', requireAdmin, async (req, res) => {
   const db = await getDb();
 
-  const [users, picks, feedback, emailLogs] = await Promise.all([
+  const [users, picks, feedback, emailLogs, communityPosts] = await Promise.all([
     db.all(`
-      SELECT username, email, verified,
+      SELECT id, username, email, verified, is_admin, is_supporter,
              datetime(created_at, 'unixepoch') AS joined
       FROM   users
       ORDER  BY created_at DESC
@@ -47,11 +53,22 @@ router.get('/dashboard', requireSecret, async (req, res) => {
       ORDER  BY sent_at DESC
       LIMIT  200
     `),
+    db.all(`
+      SELECT p.id, p.body, p.category, p.pinned,
+             datetime(p.created_at, 'unixepoch') AS posted_at,
+             COALESCE(u.username, SUBSTR(u.email,1,INSTR(u.email,'@')-1)) AS username,
+             (SELECT COUNT(*) FROM community_replies r WHERE r.post_id = p.id)    AS reply_count,
+             (SELECT COUNT(*) FROM community_post_likes l WHERE l.post_id = p.id) AS like_count
+      FROM   community_posts p JOIN users u ON u.id = p.user_id
+      ORDER  BY p.pinned DESC, p.created_at DESC
+      LIMIT  200
+    `),
   ]);
 
-const secret = req.query.secret;
-  const totalUsers     = users.length;
-  const verifiedUsers  = users.filter(u => u.verified).length;
+  const secret = req.query.secret;
+  const totalUsers      = users.length;
+  const verifiedUsers   = users.filter(u => u.verified).length;
+  const supporterCount  = users.filter(u => u.is_supporter).length;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -225,9 +242,10 @@ const secret = req.query.secret;
 </head>
 <body>
   <div class="header">
+    <a href="/" style="margin-right:1rem;font-size:.8rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:6px;padding:.3rem .7rem;transition:all .15s;white-space:nowrap;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">← Back to ARVL</a>
     <h1>ARVL Admin</h1>
     <span>dashboard</span>
-    <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">Light mode</button>
+    <button class="theme-btn" onclick="toggleTheme()" id="theme-btn" style="margin-left:auto;">Light mode</button>
   </div>
 
   <div class="stats">
@@ -244,14 +262,23 @@ const secret = req.query.secret;
       <div class="stat-label">Total picks</div>
     </div>
     <div class="stat">
+      <div class="stat-value">${supporterCount}</div>
+      <div class="stat-label">Supporters</div>
+    </div>
+    <div class="stat">
       <div class="stat-value">${feedback.length}</div>
       <div class="stat-label">Feedback submissions</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">${communityPosts.length}</div>
+      <div class="stat-label">Community posts</div>
     </div>
   </div>
 
   <div class="nav-tabs">
     <button class="tab active" onclick="showTab('members')">Members</button>
     <button class="tab" onclick="showTab('picks')">Picks</button>
+    <button class="tab" onclick="showTab('community')">Community</button>
     <button class="tab" onclick="showTab('feedback')">Feedback</button>
     <button class="tab" onclick="showTab('emails')">Emails</button>
   </div>
@@ -267,15 +294,33 @@ const secret = req.query.secret;
             <th>Username</th>
             <th>Email</th>
             <th>Status</th>
+            <th>Role</th>
+            <th>Supporter</th>
             <th>Joined</th>
           </tr>
         </thead>
         <tbody>
           ${users.map(u => `
-          <tr>
+          <tr id="user-row-${u.id}">
             <td>${esc(u.username || '—')}</td>
             <td>${esc(u.email)}</td>
             <td><span class="badge ${u.verified ? 'badge--verified' : 'badge--pending'}">${u.verified ? 'Verified' : 'Pending'}</span></td>
+            <td>
+              <button
+                class="admin-toggle-btn"
+                data-user-id="${u.id}"
+                data-is-admin="${u.is_admin ? '1' : '0'}"
+                style="background:none;border:1px solid var(--border);border-radius:6px;padding:.2rem .6rem;font-size:.75rem;cursor:pointer;color:${u.is_admin ? '#4caf50' : 'var(--muted)'};font-family:inherit;transition:all .15s;"
+              >${u.is_admin ? 'Admin' : 'Member'}</button>
+            </td>
+            <td>
+              <button
+                class="supporter-toggle-btn"
+                data-user-id="${u.id}"
+                data-is-supporter="${u.is_supporter ? '1' : '0'}"
+                style="background:none;border:1px solid var(--border);border-radius:6px;padding:.2rem .6rem;font-size:.75rem;cursor:pointer;color:${u.is_supporter ? '#c9a84c' : 'var(--muted)'};font-family:inherit;transition:all .15s;"
+              >${u.is_supporter ? '★ Yes' : '—'}</button>
+            </td>
             <td>${u.joined}</td>
           </tr>`).join('')}
         </tbody>
@@ -316,6 +361,49 @@ const secret = req.query.secret;
 
             <td><span class="note">${p.note ? esc(p.note) : '—'}</span></td>
             <td>${p.picked_at}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`}
+    </section>
+  </div>
+
+  <!-- Community -->
+  <div class="panel" id="panel-community">
+    <section>
+      <h2>Community Posts</h2>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem" id="comm-filters">
+        <button class="tab active" onclick="filterCommunity('')">All</button>
+        <button class="tab" onclick="filterCommunity('discussion')">Discussion</button>
+        <button class="tab" onclick="filterCommunity('feature-request')">Feature Request</button>
+        <button class="tab" onclick="filterCommunity('bug')">Bug Report</button>
+        <button class="tab" onclick="filterCommunity('question')">Question</button>
+        <button class="tab" onclick="filterCommunity('feedback')">Feedback</button>
+      </div>
+      ${communityPosts.length === 0 ? '<p class="empty">No posts yet.</p>' : `
+      <table id="comm-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Category</th>
+            <th>Post</th>
+            <th>Replies</th>
+            <th>Likes</th>
+            <th>Pinned</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${communityPosts.map(p => `
+          <tr data-cat="${esc(p.category)}">
+            <td>${esc(p.username)}</td>
+            <td><span class="category">${esc(p.category)}</span></td>
+            <td style="max-width:300px;word-break:break-word">
+              <a href="/community?post=${p.id}" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(p.body)}</a>
+            </td>
+            <td>${p.reply_count}</td>
+            <td>${p.like_count}</td>
+            <td>${p.pinned ? '<span class="badge badge--verified">Pinned</span>' : '—'}</td>
+            <td>${p.posted_at}</td>
           </tr>`).join('')}
         </tbody>
       </table>`}
@@ -392,10 +480,59 @@ const secret = req.query.secret;
 
     function showTab(name) {
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.nav-tabs .tab').forEach(t => t.classList.remove('active'));
       document.getElementById('panel-' + name).classList.add('active');
       event.target.classList.add('active');
     }
+
+    function filterCommunity(cat) {
+      document.querySelectorAll('#comm-filters .tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      const rows = document.querySelectorAll('#comm-table tbody tr');
+      rows.forEach(row => {
+        row.style.display = (!cat || row.dataset.cat === cat) ? '' : 'none';
+      });
+    }
+
+    // Admin toggle buttons
+    document.querySelectorAll('.admin-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId  = btn.dataset.userId;
+        btn.disabled  = true;
+        try {
+          const r = await fetch('/admin/users/' + userId + '/toggle-admin', { method: 'POST' });
+          if (!r.ok) throw new Error();
+          const d = await r.json();
+          btn.dataset.isAdmin   = d.isAdmin ? '1' : '0';
+          btn.textContent       = d.isAdmin ? 'Admin' : 'Member';
+          btn.style.color       = d.isAdmin ? '#4caf50' : 'var(--muted)';
+        } catch {
+          alert('Failed to update role.');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // Supporter toggle buttons
+    document.querySelectorAll('.supporter-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.dataset.userId;
+        btn.disabled = true;
+        try {
+          const r = await fetch('/admin/users/' + userId + '/toggle-supporter', { method: 'POST' });
+          if (!r.ok) throw new Error();
+          const d = await r.json();
+          btn.dataset.isSupporter = d.isSupporter ? '1' : '0';
+          btn.textContent         = d.isSupporter ? '★ Yes' : '—';
+          btn.style.color         = d.isSupporter ? '#c9a84c' : 'var(--muted)';
+        } catch {
+          alert('Failed to update supporter status.');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
   </script>
 </body>
 </html>`;
@@ -409,6 +546,36 @@ const secret = req.query.secret;
   }
 
   res.send(html);
+});
+
+// ── POST /admin/users/:id/toggle-admin ────────────────────
+router.post('/users/:id/toggle-admin', requireAdmin, async (req, res) => {
+  try {
+    const db   = await getDb();
+    const user = await db.get('SELECT id, is_admin FROM users WHERE id = ?', req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    const newVal = user.is_admin ? 0 : 1;
+    await db.run('UPDATE users SET is_admin = ? WHERE id = ?', newVal, user.id);
+    res.json({ isAdmin: !!newVal });
+  } catch (err) {
+    console.error('toggle-admin error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── POST /admin/users/:id/toggle-supporter ────────────────
+router.post('/users/:id/toggle-supporter', requireAdmin, async (req, res) => {
+  try {
+    const db   = await getDb();
+    const user = await db.get('SELECT id, is_supporter FROM users WHERE id = ?', req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    const newVal = user.is_supporter ? 0 : 1;
+    await db.run('UPDATE users SET is_supporter = ? WHERE id = ?', newVal, user.id);
+    res.json({ isSupporter: !!newVal });
+  } catch (err) {
+    console.error('toggle-supporter error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
 // ── GET /admin/test-email ─────────────────────────────────

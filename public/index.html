@@ -4,44 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ARVL</title>
-  <link rel="stylesheet" href="style.css?v=72" />
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="ARVL"/>
+  <script>if(sessionStorage.getItem('arvl_intro_done'))document.documentElement.classList.add('skip-intro');</script>
+  <link rel="stylesheet" href="style.css?v=102" />
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  </script>
 </head>
 <body>
 
   <!-- ── Header ─────────────────────────────────────────── -->
-  <header class="site-header">
-    <div class="header-inner">
-      <a href="/" class="brand">ARVL</a>
-      <div class="header-right">
-        <a class="btn-bmc" href="https://buymeacoffee.com/deandreraheem" target="_blank" rel="noopener">☕ Buy me a coffee</a>
-        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
-          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="4"/>
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-          </svg>
-          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
-        </button>
-        <div class="auth-row" id="auth-loggedout">
-          <button class="btn-nav" id="btn-login">Login</button>
-          <button class="btn-nav btn-nav--join" id="btn-register">Join the club</button>
-        </div>
-        <div class="auth-row" id="auth-loggedin" hidden>
-          <div class="user-menu">
-            <button class="user-menu-btn" id="user-chip"></button>
-            <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
-              <button class="user-menu-item" id="btn-logout">Sign out</button>
-            </div>
-          </div>
-          <button class="btn-nav btn-spotify" id="btn-spotify" title="Connect Spotify">
-            Connect
-            <svg class="spotify-logo" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  </header>
+  <header id="site-header"></header>
 
   <!-- ── Main ───────────────────────────────────────────── -->
   <main class="main">
@@ -231,27 +212,9 @@
     </div>
   </aside>
 
-  <!-- ── Artist panel ───────────────────────────────────── -->
-  <aside class="album-panel artist-panel" id="artist-panel" hidden aria-label="Artist details">
-    <div class="ap-inner" id="artist-inner">
-      <p class="ap-loading">Loading…</p>
-    </div>
-  </aside>
-
-  <!-- ── Album panel ────────────────────────────────────── -->
-  <aside class="album-panel" id="album-panel" hidden aria-label="Album details">
-    <div class="ap-inner" id="ap-inner">
-      <p class="ap-loading">Loading…</p>
-    </div>
-  </aside>
-  <audio id="preview-audio"></audio>
-
+  <script src="/js/common.js"></script>
   <script>
     // ── Utilities ──────────────────────────────────────────
-    const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
-    );
-
     function isoWeekKey(d = new Date()) {
       const u = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
       u.setUTCDate(u.getUTCDate() + 4 - (u.getUTCDay() || 7));
@@ -270,6 +233,13 @@
       const wrap  = document.querySelector('.search-wrap');
       const input = document.getElementById('search-input');
       const FULL  = 'Search albums\u2026';
+
+      // Skip on repeat same-session visits — just show the search bar immediately
+      if (document.documentElement.classList.contains('skip-intro')) {
+        wrap.style.opacity = '1';
+        input.placeholder = FULL;
+        return;
+      }
 
       // After 2s blur clears, draw the search bar border from center-top clockwise
       setTimeout(function() {
@@ -334,7 +304,10 @@
           var t = setInterval(function() {
             i++;
             input.placeholder = FULL.slice(0, i);
-            if (i >= FULL.length) clearInterval(t);
+            if (i >= FULL.length) {
+              clearInterval(t);
+              sessionStorage.setItem('arvl_intro_done', '1');
+            }
           }, 65);
         }, 900);
       }, 2000);
@@ -343,37 +316,22 @@
     let _toastTimer;
     function showToast(msg, type = 'ok', onClick = null) {
       const el = document.getElementById('toast');
-      el.textContent = msg;
+      el.innerHTML = msg;
       el.className = `toast toast--${type} toast--visible${onClick ? ' toast--clickable' : ''}`;
       el.onclick = onClick || null;
+      el.querySelectorAll('.toast-link').forEach(link => {
+        link.addEventListener('click', e => {
+          e.stopPropagation();
+          el.classList.remove('toast--visible');
+        });
+      });
       clearTimeout(_toastTimer);
       _toastTimer = setTimeout(() => el.classList.remove('toast--visible'), 3500);
     }
 
-    // ── Theme ──────────────────────────────────────────────
-    const htmlEl = document.documentElement;
-    if (localStorage.getItem('theme') === 'light') htmlEl.classList.replace('dark', 'light');
-    document.getElementById('theme-toggle').addEventListener('click', () => {
-      const light = htmlEl.classList.contains('light');
-      htmlEl.classList.replace(light ? 'light' : 'dark', light ? 'dark' : 'light');
-      localStorage.setItem('theme', light ? 'dark' : 'light');
-    });
-
     // ── Week labels ────────────────────────────────────────
     const WEEK = isoWeekKey();
     document.getElementById('week-label').textContent = weekDisplay(WEEK);
-
-    // ── Auth button glow (nudge logged-out users to sign in) ─
-    function glowAuthButtons() {
-      ['btn-login', 'btn-register'].forEach(id => {
-        const btn = document.getElementById(id);
-        if (!btn) return;
-        btn.classList.remove('btn--glow');
-        void btn.offsetWidth; // force reflow so animation restarts
-        btn.classList.add('btn--glow');
-        btn.addEventListener('animationend', () => btn.classList.remove('btn--glow'), { once: true });
-      });
-    }
 
     // ── Modals ─────────────────────────────────────────────
     function openModal(id) {
@@ -392,23 +350,27 @@
     );
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
-        const albumPanel  = document.getElementById('album-panel');
-        const artistPanel = document.getElementById('artist-panel');
         const searchPanel = document.getElementById('search-panel');
-        if (!albumPanel.hidden)  { closeAlbumPanel();  return; }
-        if (!artistPanel.hidden) { closeArtistPanel(); return; }
         if (!searchPanel.hidden) { closeSearchPanel(); return; }
         document.querySelectorAll('.modal-overlay:not([hidden])').forEach(o => closeModal(o.id));
       }
     });
 
-    document.getElementById('btn-login').addEventListener('click',    () => openModal('modal-login'));
-    document.getElementById('btn-register').addEventListener('click', () => openModal('modal-register'));
     document.getElementById('sw-to-reg').addEventListener('click',    () => { closeModal('modal-login');    openModal('modal-register'); });
     document.getElementById('sw-to-login').addEventListener('click',  () => { closeModal('modal-register'); openModal('modal-login'); });
 
+    // ── Splash ─────────────────────────────────────────────
+    const SPLASH_KEY = 'arvl_splash_v1';
+    function maybeShowSplash() {
+      try {
+        if (!localStorage.getItem(SPLASH_KEY)) setTimeout(() => openModal('modal-splash'), 600);
+      } catch {}
+    }
+
     // ── Auth state ─────────────────────────────────────────
     let me          = null;
+    let _myCrateIds = new Set();
+    let _myLLIds    = new Set();
     let myPickId    = null;
     let myPickNote  = null;
     let pendingPick = null;
@@ -431,7 +393,7 @@
     const SPOTIFY_LOGO_SVG = `<svg class="spotify-logo" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>`;
 
     function updateSpotifyBtn() {
-      const btn = document.getElementById('btn-spotify');
+      const btn = document.getElementById('hdr-btn-spotify');
       if (!btn) return;
       if (spotifyConnected) {
         btn.innerHTML = `Connected ${SPOTIFY_LOGO_SVG}`;
@@ -613,24 +575,24 @@
       _mpHoverTimer = setTimeout(closeMpTracklist, 200);
     });
 
-    // Click artwork → open the album side panel
+    // Click artwork → navigate to album page
     mpArtEl.addEventListener('click', () => {
-      if (_mpAlbumId) openAlbumPanel(_mpAlbumId);
+      if (_mpAlbumId) location.href = '/album/' + _mpAlbumId;
     });
 
-    document.getElementById('btn-spotify').addEventListener('click', async () => {
-      if (!me) { openModal('modal-login'); return; }
+    async function handleSpotifyBtnClick() {
       if (spotifyConnected) {
         await fetch('/player/disconnect', { method: 'DELETE' });
         spotifyConnected = false;
         stopPlayerPoll();
         document.getElementById('mini-player').hidden = true;
-        updateSpotifyBtn();
+        const hdrSpot = document.getElementById('hdr-btn-spotify');
+        if (hdrSpot) { hdrSpot.innerHTML = `Connect ${SPOTIFY_LOGO_SVG}`; hdrSpot.classList.remove('btn-spotify--on'); }
         showToast('Spotify disconnected.');
       } else {
         window.location.href = '/player/connect';
       }
-    });
+    }
 
     document.getElementById('mp-playpause').addEventListener('click', async () => {
       const playing = document.getElementById('mp-playpause').textContent === '⏸';
@@ -647,42 +609,6 @@
     });
 
     // Handle ?spotify_connected and ?spotify_error query params
-    (function handleSpotifyQueryParam() {
-      const p = new URLSearchParams(location.search);
-      if (p.has('spotify_connected')) {
-        showToast('Spotify connected!');
-        history.replaceState({}, '', '/');
-      } else if (p.has('spotify_error')) {
-        showToast('Spotify connection failed.', 'err');
-        history.replaceState({}, '', '/');
-      }
-    })();
-
-    function applyAuthUI(user) {
-      me = user;
-      document.getElementById('auth-loggedout').hidden  = !!user;
-      document.getElementById('auth-loggedin').hidden   = !user;
-      document.getElementById('my-pick-section').hidden = !user;
-      if (user) {
-        document.getElementById('user-chip').textContent = user.username || user.email;
-        loadMyPick();
-        checkSpotifyStatus();
-      } else {
-        spotifyConnected = false;
-        stopPlayerPoll();
-        document.getElementById('mini-player').hidden = true;
-        updateSpotifyBtn();
-      }
-    }
-
-    async function refreshAuth() {
-      try {
-        const r = await fetch('/auth/me');
-        const d = await r.json();
-        applyAuthUI(d.user);
-      } catch { applyAuthUI(null); }
-    }
-
     // ── Login ──────────────────────────────────────────────
     document.getElementById('form-login').addEventListener('submit', async e => {
       e.preventDefault();
@@ -702,7 +628,13 @@
         const d = await r.json();
         if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
         closeModal('modal-login');
-        applyAuthUI({ email: d.email, username: d.username });
+        me = { email: d.email, username: d.username, isAdmin: !!d.isAdmin };
+        try { sessionStorage.setItem('arvl_u2', JSON.stringify(me)); } catch {}
+        initHeader({ active: null });
+        document.getElementById('my-pick-section').hidden = false;
+        loadMyPick();
+        loadMyLists();
+        checkSpotifyStatus();
         loadLeaderboard();
         loadRecentPicks();
         if (sessionStorage.getItem('freshVerify')) {
@@ -749,6 +681,8 @@
         if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
         closeModal('modal-register');
         e.target.reset();
+        sessionStorage.removeItem('arvl_u2');
+        me = await initHeader({ active: null });
         // Show welcome moment
         document.getElementById('welcome-name').textContent = username;
         openModal('modal-welcome');
@@ -765,25 +699,29 @@
       closeModal('modal-welcome');
     });
 
-    // ── User menu dropdown ──────────────────────────────────
-    const _userMenuDropdown = document.getElementById('user-menu-dropdown');
-    document.getElementById('user-chip').addEventListener('click', e => {
-      e.stopPropagation();
-      _userMenuDropdown.hidden = !_userMenuDropdown.hidden;
-    });
-    document.addEventListener('click', () => { _userMenuDropdown.hidden = true; });
+    // ── My lists (crate + listen later) ────────────────────
+    async function loadMyLists() {
+      if (!me) return;
+      try {
+        const username = me.username || me.email.split('@')[0];
+        const r = await fetch(`/u/${encodeURIComponent(username)}`, { headers: { 'Accept': 'application/json' } });
+        if (!r.ok) return;
+        const d = await r.json();
+        _myCrateIds = new Set((d.crate        || []).map(a => a.spotifyId));
+        _myLLIds    = new Set((d.listenLater   || []).map(a => a.spotifyId));
+        applyCardStates();
+      } catch {}
+    }
 
-    // ── Logout ─────────────────────────────────────────────
-    document.getElementById('btn-logout').addEventListener('click', async () => {
-      _userMenuDropdown.hidden = true;
-      await fetch('/auth/logout', { method: 'POST' });
-      applyAuthUI(null);
-      loadLeaderboard();
-      loadRecentPicks();
-      myPickId   = null;
-      myPickNote = null;
-      showToast('Logged out.');
-    });
+    function applyCardStates() {
+      document.querySelectorAll('.lb-card, .rp-card').forEach(card => {
+        const id = card.querySelector('[data-spotify-id]')?.dataset.spotifyId ||
+                   card.querySelector('.lb-card-btn, .rp-card-btn')?.dataset.spotifyId;
+        if (!id) return;
+        card.querySelector('.ca-add')?.classList.toggle('ca-btn--active', _myCrateIds.has(id));
+        card.querySelector('.ca-ll')?.classList.toggle('ca-btn--active', _myLLIds.has(id));
+      });
+    }
 
     // ── My pick ────────────────────────────────────────────
     async function loadMyPick() {
@@ -813,7 +751,7 @@
           </div>
         </button>
       `;
-      el.querySelector('.my-pick-card--btn').addEventListener('click', () => openAlbumPanel(album.spotifyId, album));
+      el.querySelector('.my-pick-card--btn').addEventListener('click', () => { location.href = '/album/' + album.spotifyId; });
     }
 
     // ── Leaderboard ────────────────────────────────────────
@@ -841,21 +779,53 @@
         const card       = document.createElement('div');
         card.className   = 'lb-card';
         card.innerHTML   = `
-          <button class="lb-card-btn" data-spotify-id="${esc(a.spotifyId)}" aria-label="Open ${esc(a.title)}">
+          <div class="lb-card-btn" role="button" tabindex="0" data-spotify-id="${esc(a.spotifyId)}" aria-label="Open ${esc(a.title)}">
             <div class="lb-card-cover" ${bg}>
               <span class="lb-card-rank">${i + 1}</span>
+              ${me ? `<div class="card-actions">
+                <button class="ca-btn ca-stream" title="Stream" data-action="stream">
+                  <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                </button>
+                <button class="ca-btn ca-add" title="Add to collection" data-action="add">
+                  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><g class="icon-plus"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></g><polyline class="icon-check" points="4,13 9,18 20,7"/></svg>
+                </button>
+                <button class="ca-btn ca-ll" title="Listen later" data-action="ll">
+                  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,15"/></svg>
+                </button>
+              </div>` : ''}
             </div>
             <div class="lb-card-body">
               <p class="lb-card-title">${esc(a.title)}</p>
               <p class="lb-card-artist">${esc(a.artist)}</p>
               ${meta}
             </div>
-          </button>
+          </div>
           <div class="lb-card-footer">
             <span class="lb-card-count">${a.count} ${a.count === 1 ? 'pick' : 'picks'}</span>
           </div>
         `;
-        card.querySelector('.lb-card-btn').addEventListener('click', () => openAlbumPanel(a.spotifyId, a));
+        card.querySelector('.lb-card-btn').addEventListener('click', () => { location.href = '/album/' + a.spotifyId; });
+        card.querySelectorAll('.ca-btn').forEach(btn => {
+          btn.addEventListener('click', async e => {
+            e.stopPropagation();
+            const action = btn.dataset.action;
+            if (action === 'stream') {
+              openStreamPop(btn, a.title, a.artist, a.spotifyId);
+            } else if (action === 'add') {
+              try {
+                const r = await fetch(`/crate/${encodeURIComponent(a.spotifyId)}`, { method: 'POST' });
+                if (r.ok) { const d = await r.json(); btn.classList.toggle('ca-btn--active', d.inCrate); _myCrateIds[d.inCrate ? 'add' : 'delete'](a.spotifyId); showToast(d.inCrate ? `Added to <a class="toast-link" href="/u/${encodeURIComponent(me.username || me.email.split('@')[0])}?tab=crate">Collection</a>` : 'Removed from Collection'); }
+              } catch {}
+            } else if (action === 'll') {
+              try {
+                const r = await fetch(`/listen-later/${encodeURIComponent(a.spotifyId)}`, { method: 'POST' });
+                if (r.ok) { const d = await r.json(); btn.classList.toggle('ca-btn--active', d.inListenLater); _myLLIds[d.inListenLater ? 'add' : 'delete'](a.spotifyId); showToast(d.inListenLater ? `Added to <a class="toast-link" href="/u/${encodeURIComponent(me.username || me.email.split('@')[0])}?tab=later">Listen Later</a>` : 'Removed from Listen Later'); }
+              } catch {}
+            }
+          });
+        });
+        card.querySelector('.ca-add')?.classList.toggle('ca-btn--active', _myCrateIds.has(a.spotifyId));
+        card.querySelector('.ca-ll')?.classList.toggle('ca-btn--active', _myLLIds.has(a.spotifyId));
         grid.appendChild(card);
       });
       if (!me) {
@@ -922,11 +892,6 @@
         rerenderPickButtons();
         loadLeaderboard();
         showToast(`Picked "${album.title}"!`);
-        // Update pick button in panel if it's open for this album
-        if (_panelSpotifyId === album.spotifyId) {
-          const panelBtn = document.querySelector('#ap-inner .ap-pick-btn');
-          if (panelBtn) { panelBtn.textContent = 'Your pick ✓'; panelBtn.classList.add('btn-pick--active'); panelBtn.disabled = true; }
-        }
       } catch {
         showToast('Error saving pick.', 'err');
       }
@@ -954,8 +919,6 @@
           myPickNote = note;
           closeModal('modal-pick-note');
           showToast(note ? 'Note saved.' : 'Note removed.');
-          // Reopen the panel to reflect the updated note
-          if (_panelSpotifyId) openAlbumPanel(_panelSpotifyId);
         } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; }
         btn.disabled = false;
       } else {
@@ -1046,8 +1009,7 @@
         `;
         row.style.animationDelay = `${albums.indexOf(album) * 55}ms`;
         row.querySelector('.sr-main').addEventListener('click', () => {
-          document.getElementById('search-results').hidden = true;
-          openAlbumPanel(album.spotifyId, album);
+          location.href = '/album/' + album.spotifyId;
         });
         row.querySelector('.btn-pick').addEventListener('click', () => openPickNoteModal(album));
         el.appendChild(row);
@@ -1066,16 +1028,38 @@
     }
 
 
-    // ── Album panel ────────────────────────────────────────
-    let _panelSpotifyId = null;   // currently open album
-    let _playingTrackId = null;   // currently playing track id
-    const _audio        = document.getElementById('preview-audio');
+    // ── Shared stream popover ───────────────────────────────
+    let _sharedStreamPop = null;
+    const closeSharedStreamPop = () => { if (_sharedStreamPop) { _sharedStreamPop.remove(); _sharedStreamPop = null; } };
 
-    _audio.addEventListener('ended', () => {
-      _playingTrackId = null;
-      document.querySelectorAll('.track-play-btn').forEach(b => b.innerHTML = playIcon());
-    });
+    let _pickersPop = null;
+    const closePickersPop = () => { if (_pickersPop) { _pickersPop.remove(); _pickersPop = null; } };
 
+    function openStreamPop(anchorEl, title, artist, spotifyId, isDeezer = false, appleMusicUrl = null, onStream = null) {
+      document.removeEventListener('click', closeSharedStreamPop); // clear any stale outside-click listener first
+      closeSharedStreamPop();
+      const q = encodeURIComponent(title + ' ' + artist);
+      const spotifyHref     = isDeezer ? `https://open.spotify.com/search/${q}` : `https://open.spotify.com/album/${spotifyId}`;
+      const appleMusicHref  = appleMusicUrl || `https://music.apple.com/us/search?term=${q}`;
+      const tidalHref       = `https://tidal.com/search/albums?q=${q}`;
+      const deezerHref      = `https://www.deezer.com/search/${encodeURIComponent((title + ' ' + artist).toLowerCase())}/album`;
+      const rect = anchorEl.getBoundingClientRect();
+      _sharedStreamPop = document.createElement('div');
+      _sharedStreamPop.className = 'stream-popover';
+      _sharedStreamPop.innerHTML = `
+        <a class="stream-option stream-option--spotify" href="${spotifyHref}"    target="_blank" rel="noopener">Spotify</a>
+        <a class="stream-option stream-option--apple"   href="${appleMusicHref}" target="_blank" rel="noopener">Apple Music</a>
+        <a class="stream-option stream-option--tidal"   href="${tidalHref}"      target="_blank" rel="noopener">Tidal</a>
+        <a class="stream-option stream-option--deezer"  href="${deezerHref}"     target="_blank" rel="noopener">Deezer</a>
+      `;
+      _sharedStreamPop.style.top   = `${rect.bottom + 6}px`;
+      _sharedStreamPop.style.right = `${window.innerWidth - rect.right}px`;
+      if (onStream) _sharedStreamPop.querySelectorAll('.stream-option').forEach(a => a.addEventListener('click', onStream));
+      document.body.appendChild(_sharedStreamPop);
+      setTimeout(() => document.addEventListener('click', closeSharedStreamPop, { once: true }), 0);
+    }
+
+    // ── Album panel helpers ─────────────────────────────────
     function playIcon()  { return '<svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><polygon points="5,3 19,12 5,21"/></svg>'; }
     function pauseIcon() { return '<svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>'; }
 
@@ -1088,66 +1072,9 @@
       return new Date(unixSec * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
-    function openAlbumPanel(spotifyId, hintAlbum = null) {
-      _panelSpotifyId = spotifyId;
-      const panel = document.getElementById('album-panel');
-      const inner = document.getElementById('ap-inner');
+    // ── Community panel (now a full page — nav link in header) ────────────────
 
-      // Show placeholder immediately from hint data while we fetch
-      if (hintAlbum) {
-        const bg = hintAlbum.coverUrl ? `style="background-image:url('${esc(hintAlbum.coverUrl)}')"` : '';
-        inner.innerHTML = `
-          <div class="ap-hero">
-            <div class="ap-cover" ${bg}></div>
-            <div class="ap-meta">
-              <h2 class="ap-title">${esc(hintAlbum.title)}</h2>
-              <p class="ap-artist">${esc(hintAlbum.artist)}</p>
-            </div>
-          </div>
-          <p class="ap-loading" style="padding:1.5rem 1.25rem">Loading tracks…</p>
-        `;
-      } else {
-        inner.innerHTML = '<p class="ap-loading">Loading…</p>';
-      }
-
-      panel.hidden = false;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => panel.classList.add('ap-open'));
-      });
-
-      // Fetch album detail + comments in parallel
-      Promise.all([
-        fetch(`/albums/${encodeURIComponent(spotifyId)}`).then(r => r.json()),
-        fetch(`/albums/${encodeURIComponent(spotifyId)}/comments`).then(r => r.json()),
-      ]).then(([albumRes, commentsRes]) => {
-        if (_panelSpotifyId !== spotifyId) return; // panel switched
-        const panelPickNote = (albumRes.album?.spotifyId === myPickId) ? myPickNote : null;
-        renderAlbumPanel(albumRes.album, albumRes.tracks, albumRes.weekPickCount, commentsRes.comments ?? [], albumRes.appleMusicUrl ?? null, albumRes.description ?? null, albumRes.descriptionSource ?? null, albumRes.pickNotes ?? [], panelPickNote, albumRes.listenCount ?? 0, albumRes.isListening ?? false);
-      }).catch(() => {
-        if (_panelSpotifyId !== spotifyId) return;
-        document.getElementById('ap-inner').innerHTML = '<p class="ap-loading" style="color:var(--error)">Failed to load album.</p>';
-      });
-    }
-
-    function closeAlbumPanel() {
-      const panel = document.getElementById('album-panel');
-      panel.classList.remove('ap-open');
-      _panelSpotifyId = null;
-      _audio.pause();
-      _playingTrackId = null;
-      panel.addEventListener('transitionend', () => {
-        panel.hidden = true;
-      }, { once: true });
-    }
-
-    document.addEventListener('mousedown', e => {
-      const panel = document.getElementById('album-panel');
-      if (!panel.classList.contains('ap-open')) return;
-      if (!panel.contains(e.target)) closeAlbumPanel();
-    });
     document.getElementById('sp-overlay').addEventListener('click', () => {
-      const artistPanel = document.getElementById('artist-panel');
-      if (!artistPanel.hidden) { closeArtistPanel(); return; }
       closeSearchPanel();
     });
     document.getElementById('sp-back-btn').addEventListener('click', closeSearchPanel);
@@ -1173,20 +1100,13 @@
         const r = await fetch(`/search?q=${encodeURIComponent(q)}`);
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || 'Search failed');
-        renderSearchPanel(d.artists ?? [], d.albums ?? [], !!d._fallback);
+        renderSearchPanel(d.artists ?? [], d.albums ?? []);
       } catch {
         body.innerHTML = '<p class="sp-loading">Search failed. Try again.</p>';
       }
     }
 
     function closeSearchPanel() {
-      // Also dismiss the artist panel if it was open inside the search flow
-      const artistPanel = document.getElementById('artist-panel');
-      if (!artistPanel.hidden) {
-        artistPanel.classList.remove('ap-open');
-        artistPanel.hidden = true;
-        _artistPanelId = null;
-      }
       const panel   = document.getElementById('search-panel');
       const overlay = document.getElementById('sp-overlay');
       panel.classList.remove('sp-open');
@@ -1198,28 +1118,87 @@
     }
 
     function makeAlbumListRow(album, onClick) {
-      const bg  = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
-      const row = document.createElement('button');
+      const bg      = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
+      const inCrate = _myCrateIds.has(album.spotifyId);
+      const inLL    = _myLLIds.has(album.spotifyId);
+      const row = document.createElement('div');
       row.className = 'sp-list-row';
-      row.setAttribute('aria-label', `Open ${album.title}`);
       row.innerHTML = `
-        <div class="sp-list-cover" ${bg}></div>
-        <div class="sp-list-info">
-          <span class="sp-list-title">${esc(album.title)}</span>
-          <span class="sp-list-artist">${esc(album.artist)}</span>
-          ${album.releaseYear ? `<span class="sp-list-year">${esc(album.releaseYear)}</span>` : ''}
+        <button class="sp-list-main" aria-label="Open ${esc(album.title)}">
+          <div class="sp-list-cover" ${bg}></div>
+          <div class="sp-list-info">
+            <span class="sp-list-title">${esc(album.title)}</span>
+            <span class="sp-list-artist">${esc(album.artist)}</span>
+            ${album.releaseYear ? `<span class="sp-list-year">${esc(album.releaseYear)}</span>` : ''}
+          </div>
+        </button>
+        <div class="sp-list-actions">
+          <button class="btn-stream" title="Stream">
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+          </button>
+          ${me ? `
+          <button class="btn-add ${inCrate ? 'btn-add--active' : ''}" title="Add to collection">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <g class="icon-plus"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></g>
+              <polyline class="icon-check" points="4,13 9,18 20,7"/>
+            </svg>
+          </button>
+          <button class="btn-ll ${inLL ? 'btn-ll--active' : ''}" title="Listen later">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/>
+              <polyline points="12,7 12,12 15,15"/>
+            </svg>
+          </button>` : ''}
         </div>
       `;
-      row.addEventListener('click', onClick);
+
+      row.querySelector('.sp-list-main').addEventListener('click', onClick);
+
+      row.querySelector('.btn-stream').addEventListener('click', e => {
+        e.stopPropagation();
+        openStreamPop(e.currentTarget, album.title, album.artist, album.spotifyId, album._deezer);
+      });
+
+      if (me) {
+        const addBtn = row.querySelector('.btn-add');
+        const llBtn  = row.querySelector('.btn-ll');
+
+        // Deezer albums need a DB upsert before crate/listen-later routes will accept them
+        const ensureInDb = async () => {
+          if (album._deezer) await fetch(`/albums/${encodeURIComponent(album.spotifyId)}`).catch(() => {});
+        };
+
+        addBtn.addEventListener('click', async e => {
+          e.stopPropagation();
+          await ensureInDb();
+          const r = await fetch(`/crate/${encodeURIComponent(album.spotifyId)}`, { method: 'POST' });
+          if (!r.ok) return;
+          const d = await r.json();
+          addBtn.classList.toggle('btn-add--active', d.inCrate);
+          _myCrateIds[d.inCrate ? 'add' : 'delete'](album.spotifyId);
+          showToast(d.inCrate ? `Added to <a class="toast-link" href="/u/${encodeURIComponent(me.username || me.email.split('@')[0])}?tab=crate">Collection</a>` : 'Removed from Collection');
+        });
+
+        llBtn.addEventListener('click', async e => {
+          e.stopPropagation();
+          await ensureInDb();
+          const r = await fetch(`/listen-later/${encodeURIComponent(album.spotifyId)}`, { method: 'POST' });
+          if (!r.ok) return;
+          const d = await r.json();
+          llBtn.classList.toggle('btn-ll--active', d.inListenLater);
+          _myLLIds[d.inListenLater ? 'add' : 'delete'](album.spotifyId);
+          showToast(d.inListenLater ? `Added to <a class="toast-link" href="/u/${encodeURIComponent(me.username || me.email.split('@')[0])}?tab=later">Listen Later</a>` : 'Removed from Listen Later');
+        });
+      }
+
       return row;
     }
 
-    // Deezer albums now load directly from the dz_ backend endpoint
     function resolveAndOpenDeezerAlbum(album) {
-      openAlbumPanel(album.spotifyId, album);
+      location.href = '/album/' + album.spotifyId;
     }
 
-    function renderSearchPanel(artists, albums, isFallback = false) {
+    function renderSearchPanel(artists, albums) {
       const body = document.getElementById('sp-body');
       if (!artists.length && !albums.length) {
         body.innerHTML = '<p class="sp-loading">No results found.</p>';
@@ -1227,16 +1206,8 @@
       }
       const container = document.createElement('div');
 
-      // ── Fallback notice
-      if (isFallback) {
-        const notice = document.createElement('p');
-        notice.className = 'sp-fallback-notice';
-        notice.textContent = 'Spotify is busy — showing alternative results';
-        container.appendChild(notice);
-      }
-
-      // ── Artists section (only for Spotify results)
-      if (artists.length && !isFallback) {
+      // ── Artists section (Spotify fallback results only)
+      if (artists.length) {
         const lbl = document.createElement('p');
         lbl.className = 'sp-section-label';
         lbl.textContent = 'Artists';
@@ -1256,7 +1227,7 @@
               <span class="sp-list-artist">Artist</span>
             </div>
           `;
-          row.addEventListener('click', () => openArtistPanel(artist.spotifyId, artist));
+          row.addEventListener('click', () => { window.open('https://open.spotify.com/artist/' + artist.spotifyId, '_blank'); });
           list.appendChild(row);
         });
         container.appendChild(list);
@@ -1274,7 +1245,7 @@
         albums.forEach(album => {
           const onClick = album._deezer
             ? () => resolveAndOpenDeezerAlbum(album)
-            : () => openAlbumPanel(album.spotifyId, album);
+            : () => { location.href = '/album/' + album.spotifyId; };
           list.appendChild(makeAlbumListRow(album, onClick));
         });
         container.appendChild(list);
@@ -1284,663 +1255,51 @@
       body.appendChild(container);
     }
 
-    // ── Artist panel ────────────────────────────────────────
-    let _artistPanelId = null;
-
-    async function openArtistPanel(spotifyId, hintArtist = null) {
-      _artistPanelId = spotifyId;
-      const panel = document.getElementById('artist-panel');
-      const inner = document.getElementById('artist-inner');
-
-      // Immediate placeholder
-      if (hintArtist) {
-        const bg = hintArtist.imageUrl ? `style="background-image:url('${esc(hintArtist.imageUrl)}')"` : '';
-        inner.innerHTML = `
-          <div class="ap-header">
-            <button class="ap-close-btn" id="artist-back-btn" aria-label="Back">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-            </button>
-          </div>
-          <div class="artist-hero">
-            <div class="artist-img" ${bg}></div>
-            <h2 class="artist-name">${esc(hintArtist.name)}</h2>
-          </div>
-          <p class="ap-loading" style="padding:1.5rem 1.25rem">Loading…</p>
-        `;
-      } else {
-        inner.innerHTML = '<p class="ap-loading">Loading…</p>';
-      }
-
-      panel.hidden = false;
-      document.body.style.overflow = 'hidden';
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => panel.classList.add('ap-open'));
-      });
-
-      try {
-        const r = await fetch(`/artists/${encodeURIComponent(spotifyId)}`);
-        const d = await r.json();
-        if (_artistPanelId !== spotifyId) return;
-        renderArtistPanel(d.artist, d.albums ?? [], d.bio ?? null);
-      } catch {
-        if (_artistPanelId !== spotifyId) return;
-        inner.innerHTML = '<p class="ap-loading" style="color:var(--error)">Failed to load artist.</p>';
-      }
-    }
-
-    function closeArtistPanel() {
-      const panel       = document.getElementById('artist-panel');
-      const searchPanel = document.getElementById('search-panel');
-      panel.classList.remove('ap-open');
-      _artistPanelId = null;
-      // Keep overflow hidden if search panel is still open
-      if (searchPanel.hidden) document.body.style.overflow = '';
-      panel.addEventListener('transitionend', () => {
-        panel.hidden = true;
-      }, { once: true });
-    }
-
-    function renderArtistPanel(artist, albums, bio) {
-      const inner   = document.getElementById('artist-inner');
-      const bg      = artist.imageUrl ? `style="background-image:url('${esc(artist.imageUrl)}')"` : '';
-      const fmtFollowers = n => n >= 1_000_000 ? `${(n/1_000_000).toFixed(1)}M followers`
-                                : n >= 1_000    ? `${(n/1_000).toFixed(0)}K followers`
-                                : `${n} followers`;
-
-      // Album rows (oldest → newest, already sorted)
-      const albumRows = albums.map(a => {
-        const abg = a.coverUrl ? `style="background-image:url('${esc(a.coverUrl)}')"` : '';
-        return `
-          <button class="sp-list-row artist-album-row" data-spotify-id="${esc(a.spotifyId)}" aria-label="Open ${esc(a.title)}">
-            <div class="sp-list-cover" ${abg}></div>
-            <div class="sp-list-info">
-              <span class="sp-list-title">${esc(a.title)}</span>
-              ${a.releaseYear ? `<span class="sp-list-year">${esc(a.releaseYear)}</span>` : ''}
-            </div>
-          </button>
-        `;
-      }).join('');
-
-      inner.innerHTML = `
-        <div class="ap-header">
-          <button class="ap-close-btn" id="artist-back-btn" aria-label="Back">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-          </button>
-        </div>
-        <div class="artist-hero">
-          <div class="artist-img" ${bg}></div>
-          <div class="artist-hero-meta">
-            <h2 class="artist-name">${esc(artist.name)}</h2>
-            ${artist.followers ? `<p class="ap-sub">${fmtFollowers(artist.followers)}</p>` : ''}
-          </div>
-        </div>
-        ${bio ? `
-        <div class="ap-tabs">
-          <button class="ap-tab-btn ap-tab-btn--active" data-tab="albums">Albums</button>
-          <button class="ap-tab-btn" data-tab="about">About</button>
-        </div>
-        <div class="ap-tab-panel" id="artist-tab-albums">
-          <div class="sp-list artist-album-list">${albumRows || '<p class="ap-loading">No albums found.</p>'}</div>
-        </div>
-        <div class="ap-tab-panel" id="artist-tab-about" hidden>
-          <p class="ap-description">${esc(bio)}</p>
-        </div>` : `
-        <div class="ap-section">
-          <h3 class="ap-section-title">Albums</h3>
-          <div class="sp-list artist-album-list">${albumRows || '<p class="ap-loading">No albums found.</p>'}</div>
-        </div>`}
-      `;
-
-      // Back button
-      document.getElementById('artist-back-btn').addEventListener('click', closeArtistPanel);
-
-      // Tab switching
-      inner.querySelectorAll('.ap-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          inner.querySelectorAll('.ap-tab-btn').forEach(b => b.classList.toggle('ap-tab-btn--active', b === btn));
-          inner.querySelectorAll('.ap-tab-panel').forEach(p => { p.hidden = p.id !== `artist-tab-${btn.dataset.tab}`; });
-        });
-      });
-
-      // Album row clicks → open album panel
-      inner.querySelectorAll('.artist-album-row').forEach((btn, i) => {
-        btn.addEventListener('click', () => openAlbumPanel(albums[i].spotifyId, albums[i]));
-      });
-    }
-
-    function renderAlbumPanel(album, tracks, weekPickCount, comments, appleMusicUrl = null, description = null, descriptionSource = null, pickNotes = [], myNote = null, listenCount = 0, isListening = false) {
-      const inner  = document.getElementById('ap-inner');
-      const isPick = album.spotifyId === myPickId;
-
-      // Deezer albums: when Spotify is connected, resolve to real Spotify album ID
-      // in the background so track buttons can use Spotify Connect instead of 30-sec previews.
-      if (album._deezer && spotifyConnected && !album._resolvedSpotifyId) {
-        fetch(`/search?q=${encodeURIComponent(album.title + ' ' + album.artist)}`)
-          .then(r => r.json())
-          .then(data => {
-            if (data._fallback || !data.albums?.length) return;
-            const match = data.albums.find(a =>
-              a.title.toLowerCase().trim() === album.title.toLowerCase().trim()
-            );
-            if (match?.spotifyId) album._resolvedSpotifyId = match.spotifyId;
-          })
-          .catch(() => {});
-      }
-
-      const artistLinks = album.artists && album.artists.length
-        ? album.artists.map(a => `<button class="ap-artist-link" data-artist-id="${esc(a.id)}" data-artist-name="${esc(a.name)}">${esc(a.name)}</button>`).join(', ')
-        : esc(album.artist);
-
-      // Track rows with per-track star ratings
-      const trackRows = tracks.map(t => `
-        <div class="track-row">
-          <button class="track-play-btn" data-track-id="${esc(t.id)}" data-track-number="${t.trackNumber}" ${t.previewUrl ? `data-preview-url="${esc(t.previewUrl)}"` : ''} aria-label="Play ${esc(t.name)}">▶</button>
-          <span class="track-num">${t.trackNumber}</span>
-          <div class="track-info">
-            <span class="track-name">${esc(t.name)}</span>
-            ${t.artist !== album.artist ? `<span class="track-feat">${esc(t.artist)}</span>` : ''}
-          </div>
-          <span class="track-duration">${fmtDuration(t.durationMs)}</span>
-        </div>
-      `).join('');
-
-      const commentHtml = renderCommentsHtml(comments);
-
-      inner.innerHTML = `
-        <div class="ap-header">
-          <button class="ap-close-btn" id="ap-close-btn" aria-label="Back">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-          </button>
-        </div>
-        <div class="ap-hero">
-          ${album.coverUrl ? `<div class="ap-cover" style="background-image:url('${esc(album.coverUrl)}')"></div>` : ''}
-          <div class="ap-meta">
-            <h2 class="ap-title">${esc(album.title)}</h2>
-            <p class="ap-artist">${artistLinks}</p>
-            ${album.releaseYear ? `<p class="ap-sub">${esc(album.releaseYear)}</p>` : ''}
-          </div>
-        </div>
-        <div class="ap-action-bar">
-          <div class="ap-action-left">
-            ${weekPickCount ? `<span class="ap-pick-count">${weekPickCount} ${weekPickCount === 1 ? 'pick' : 'picks'} this week</span>` : '<span></span>'}
-            ${isPick && !myNote ? `<button class="ap-note-btn" id="ap-note-add-btn">+ Add a note</button>` : ''}
-            ${isPick && listenCount > 0 ? `<span class="ap-members-listening">Members are listening</span>` : ''}
-          </div>
-          <div class="ap-actions">
-            <button class="btn-pick ap-pick-btn ${isPick ? 'btn-pick--active' : ''}"
-                    data-spotify-id="${esc(album.spotifyId)}"
-                    ${isPick ? 'disabled' : ''}>
-              ${isPick ? 'Your pick ✓' : 'Recommend'}
-            </button>
-            <button class="btn-stream" id="ap-stream-btn">
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-              Stream
-            </button>
-          </div>
-        </div>
-
-        <nav class="ap-tabs">
-          <button class="ap-tab-btn ap-tab-btn--active" data-tab="tracks">Tracklist</button>
-          ${description ? `<button class="ap-tab-btn" data-tab="about">About</button>` : ''}
-          ${!album._deezer ? `<button class="ap-tab-btn" data-tab="preview">Preview</button>` : ''}
-        </nav>
-
-        <div class="ap-tab-panel" id="ap-tab-tracks">
-          <div class="ap-track-list">${trackRows}</div>
-        </div>
-
-        ${description ? `
-        <div class="ap-tab-panel" id="ap-tab-about" hidden>
-          <div class="ap-section">
-            <h3 class="ap-section-title">${descriptionSource === 'album' ? 'About this album' : 'About the artist'}</h3>
-            <p class="ap-description">${esc(description)}</p>
-          </div>
-        </div>` : ''}
-
-        ${!album._deezer ? `
-        <div class="ap-tab-panel" id="ap-tab-preview" hidden>
-          <div class="ap-spotify-embed">
-            <iframe
-              src="https://open.spotify.com/embed/album/${esc(album.spotifyId)}?utm_source=generator&theme=0"
-              width="100%" height="${80 + tracks.length * 56}" frameborder="0"
-              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-              loading="lazy">
-            </iframe>
-          </div>
-        </div>` : ''}
-
-        ${pickNotes.length ? `
-        <div class="ap-section ap-pick-notes-section">
-          <h3 class="ap-section-title">Why members picked this</h3>
-          ${pickNotes.map(n => `
-            <div class="ap-pick-note"${isPick && n.username === me?.username ? ' data-own="1"' : ''}>
-              <p class="ap-pick-note-text">"${esc(n.note)}"${isPick && n.username === me?.username ? ` <button class="ap-note-btn ap-note-pencil" id="ap-note-pencil-btn" aria-label="Edit note"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : ''}</p>
-              <p class="ap-pick-note-by">— ${esc(n.username)}</p>
-            </div>`).join('')}
-        </div>` : ''}
-
-        <div class="ap-section" id="ap-comments-section">
-          <h3 class="ap-section-title">Comments</h3>
-          <div id="ap-comments-list">${commentHtml}</div>
-          ${me
-            ? `<form class="ap-comment-form" id="ap-comment-form">
-                 <textarea class="ap-comment-input" id="ap-comment-input" placeholder="Add a comment…" maxlength="1000" rows="3"></textarea>
-                 <button type="submit" class="btn btn-solid ap-comment-submit">Post</button>
-                 <p class="form-status" id="ap-comment-status" aria-live="polite"></p>
-               </form>`
-            : `<p class="ap-login-prompt">
-                 <button class="link-btn" id="ap-login-prompt-btn">Log in</button> to leave a comment.
-               </p>`
-          }
-        </div>
-      `;
-
-      // Close button
-      document.getElementById('ap-close-btn').addEventListener('click', closeAlbumPanel);
-
-      // Fade everything in: sections first, then tracks stagger, then glow
-      const SECTION_DUR  = 380; // ms for hero / actions / tabs
-      const TRACK_DELAY  = 70;  // ms stagger between tracks
-      const TRACK_DUR    = 340; // ms per track fade
-
-      // 1. Sections drift in (hero → action bar → tabs, 110ms apart)
-      const sections = [
-        inner.querySelector('.ap-hero'),
-        inner.querySelector('.ap-action-bar'),
-        inner.querySelector('.ap-tabs'),
-      ].filter(Boolean);
-      sections.forEach((el, i) => {
-        el.style.opacity = '0';
-        el.style.animation = `track-fade-in ${SECTION_DUR}ms ease-out forwards`;
-        el.style.animationDelay = `${i * 110}ms`;
-      });
-
-      // 2. Track rows stagger in after sections
-      const TRACK_OFFSET = sections.length * 110 + SECTION_DUR * 0.5;
-      const domTrackRows = [...inner.querySelectorAll('.track-row')];
-      domTrackRows.forEach((row, i) => {
-        row.style.opacity = '0';
-        row.style.animation = `track-fade-in ${TRACK_DUR}ms ease-out forwards`;
-        row.style.animationDelay = `${TRACK_OFFSET + i * TRACK_DELAY}ms`;
-      });
-
-      // 3. Pick notes + comments drift in after tracks
-      const BOTTOM_OFFSET = TRACK_OFFSET + domTrackRows.length * TRACK_DELAY + TRACK_DUR * 0.4;
-      const bottomSections = [
-        inner.querySelector('.ap-pick-notes-section'),
-        inner.querySelector('#ap-comments-section'),
-      ].filter(Boolean);
-      bottomSections.forEach((el, i) => {
-        el.style.opacity = '0';
-        el.style.animation = `track-fade-in ${SECTION_DUR}ms ease-out forwards`;
-        el.style.animationDelay = `${BOTTOM_OFFSET + i * 110}ms`;
-      });
-
-      // 4. Glow Recommend twice after last track
-      if (!isPick) {
-        const pickBtn = inner.querySelector('.ap-pick-btn');
-        const glowDelay = TRACK_OFFSET + domTrackRows.length * TRACK_DELAY + TRACK_DUR + 150;
-        if (pickBtn) {
-          setTimeout(() => {
-            pickBtn.style.animation = 'pick-pulse 1s ease-out 2';
-            pickBtn.addEventListener('animationend', () => { pickBtn.style.animation = ''; }, { once: true });
-          }, glowDelay);
-        }
-      }
-
-      // Artist name links (skip if no Spotify artist ID, e.g. Deezer albums)
-      inner.querySelectorAll('.ap-artist-link').forEach(btn => {
-        const artistId = btn.dataset.artistId;
-        if (!artistId || artistId === 'null') {
-          btn.style.cursor = 'default';
-          btn.style.textDecoration = 'none';
-          return;
-        }
-        btn.addEventListener('click', () => {
-          closeAlbumPanel();
-          openArtistPanel(artistId, { name: btn.dataset.artistName });
-        });
-      });
-
-      // Tab switching
-      inner.querySelectorAll('.ap-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          inner.querySelectorAll('.ap-tab-btn').forEach(b => b.classList.toggle('ap-tab-btn--active', b === btn));
-          inner.querySelectorAll('.ap-tab-panel').forEach(p => { p.hidden = p.id !== `ap-tab-${btn.dataset.tab}`; });
-        });
-      });
-
-      // ── Silent listen signal ────────────────────────────────
-      let _listenSignaled = false;
-      function signalListen() {
-        if (_listenSignaled || !me || isPick) return;
-        _listenSignaled = true;
-        fetch(`/listens/${encodeURIComponent(album.spotifyId)}`, { method: 'POST' })
-          .catch(() => {});
-      }
-
-      // ── Per-track play buttons ──────────────────────────────
-      let _popover = null;
-
-      function closePopover() {
-        if (_popover) { _popover.remove(); _popover = null; }
-      }
-
-      function openSpotify(trackId, mode) {
-        if (mode === 'app') {
-          window.location.href = `spotify:track:${trackId}`;
-        } else {
-          window.open(`https://open.spotify.com/track/${trackId}`, '_blank');
-        }
-      }
-
-      function showPlayPopover(btn, trackId) {
-        closePopover();
-        const rect = btn.getBoundingClientRect();
-        const pop  = document.createElement('div');
-        pop.className = 'play-popover';
-        pop.innerHTML = `
-          <button class="play-popover-btn" data-mode="app">Open in Spotify app</button>
-          <button class="play-popover-btn" data-mode="browser">Open in browser</button>
-        `;
-        // Position below the button
-        pop.style.top  = `${rect.bottom + 6}px`;
-        pop.style.left = `${rect.left}px`;
-        document.body.appendChild(pop);
-        _popover = pop;
-
-        pop.querySelectorAll('.play-popover-btn').forEach(b => {
-          b.addEventListener('click', () => {
-            const mode = b.dataset.mode;
-            sessionStorage.setItem('spotifyPlayMode', mode);
-            openSpotify(trackId, mode);
-            signalListen();
-            closePopover();
-          });
-        });
-
-        // Close on outside click
-        setTimeout(() => document.addEventListener('click', closePopover, { once: true }), 0);
-      }
-
-      inner.querySelectorAll('.track-play-btn').forEach(btn => {
-        btn.addEventListener('click', async e => {
-          e.stopPropagation();
-          const trackId    = btn.dataset.trackId;
-          const previewUrl = btn.dataset.previewUrl || null;
-
-          // Deezer albums: try Spotify Connect first (if resolved), then fall back to preview
-          if (album._deezer) {
-            if (spotifyConnected && album._resolvedSpotifyId) {
-              const trackNum = parseInt(btn.dataset.trackNumber || '1', 10);
-              const result = await spotifyPlay({
-                context_uri: `spotify:album:${album._resolvedSpotifyId}`,
-                offset:      { position: trackNum - 1 },
-              }, { silent: true });
-              if (result.ok) {
-                signalListen();
-                setTimeout(syncPlayerState, 600);
-                setTimeout(syncPlayerState, 1500);
-                return;
-              }
-            }
-            if (previewUrl) {
-              playTrack(previewUrl, trackId);
-            } else {
-              showToast('No preview available for this track', 'info');
-            }
-            return;
-          }
-
-          // Spotify albums with OAuth: try Spotify Connect playback
-          if (spotifyConnected) {
-            const result = await spotifyPlay({
-              context_uri: `spotify:album:${album.spotifyId}`,
-              offset:      { uri: `spotify:track:${trackId}` },
-            }, { silent: true });
-            if (result.ok) {
-              signalListen();
-              setTimeout(syncPlayerState, 600);
-              setTimeout(syncPlayerState, 1500); // second poll — Spotify API sometimes needs more time
-              return;
-            }
-            // Playback failed (no active device) — fall through to external link
-          }
-
-          // Open in Spotify externally
-          const savedMode = sessionStorage.getItem('spotifyPlayMode');
-          if (savedMode) {
-            openSpotify(trackId, savedMode);
-            signalListen();
-          } else {
-            showPlayPopover(btn, trackId);
-          }
-        });
-      });
-
-      // Stream button popover
-      const streamBtn = inner.querySelector('#ap-stream-btn');
-      if (streamBtn) {
-        let _streamPop = null;
-        const closeStreamPop = () => { if (_streamPop) { _streamPop.remove(); _streamPop = null; } };
-
-        streamBtn.addEventListener('click', e => {
-          e.stopPropagation();
-          if (_streamPop) { closeStreamPop(); return; }
-
-          const spotifyHref = album._deezer
-            ? `https://open.spotify.com/search/${encodeURIComponent(album.title + ' ' + album.artist)}/albums`
-            : `https://open.spotify.com/album/${album.spotifyId}`;
-          const appleMusicHref = appleMusicUrl || `https://music.apple.com/us/search?term=${encodeURIComponent(album.title + ' ' + album.artist)}`;
-          const tidalHref  = `https://tidal.com/search/albums?q=${encodeURIComponent(album.title + ' ' + album.artist)}`;
-          const deezerHref = `https://www.deezer.com/search/${encodeURIComponent((album.title + ' ' + album.artist).toLowerCase())}/album`;
-
-          const rect = streamBtn.getBoundingClientRect();
-          _streamPop = document.createElement('div');
-          _streamPop.className = 'stream-popover';
-          _streamPop.innerHTML = `
-            <a class="stream-option stream-option--spotify"      href="${spotifyHref}"    target="_blank" rel="noopener">Spotify</a>
-            <a class="stream-option stream-option--apple"        href="${appleMusicHref}" target="_blank" rel="noopener">Apple Music</a>
-            <a class="stream-option stream-option--tidal"        href="${tidalHref}"      target="_blank" rel="noopener">Tidal</a>
-            <a class="stream-option stream-option--deezer"       href="${deezerHref}"     target="_blank" rel="noopener">Deezer</a>
-          `;
-          _streamPop.style.top   = `${rect.bottom + 6}px`;
-          _streamPop.style.right = `${window.innerWidth - rect.right}px`;
-          _streamPop.querySelectorAll('.stream-option').forEach(a => {
-            a.addEventListener('click', () => signalListen());
-          });
-          document.body.appendChild(_streamPop);
-          setTimeout(() => document.addEventListener('click', closeStreamPop, { once: true }), 0);
-        });
-      }
-
-      // Pick button
-      inner.querySelector('.ap-pick-btn')?.addEventListener('click', () => openPickNoteModal(album));
-
-      // ── Inline note editing ────────────────────────────────
-      function createNoteEditEl(currentNote) {
-        const d = document.createElement('div');
-        d.className = 'ap-note-edit';
-        d.innerHTML = `
-          <textarea class="ap-note-edit-input" maxlength="150" rows="2"
-            placeholder="What makes this album special?">${esc(currentNote ?? '')}</textarea>
-          <div class="ap-note-edit-footer">
-            <span class="ap-note-edit-count"><span class="ap-note-edit-chars">${(currentNote ?? '').length}</span>/150</span>
-            <div class="ap-note-edit-btns">
-              <button type="button" class="ap-note-edit-cancel-btn">Cancel</button>
-              <button type="button" class="ap-note-edit-save-btn">Save</button>
-            </div>
-          </div>
-          <p class="ap-note-edit-status" aria-live="polite"></p>`;
-        d.querySelector('textarea').addEventListener('input', e => {
-          d.querySelector('.ap-note-edit-chars').textContent = e.target.value.length;
-        });
-        return d;
-      }
-
-      async function saveNoteEl(editEl, onSuccess) {
-        const note    = editEl.querySelector('textarea').value.trim() || null;
-        const saveBtn = editEl.querySelector('.ap-note-edit-save-btn');
-        const status  = editEl.querySelector('.ap-note-edit-status');
-        saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
-        try {
-          const r = await fetch('/recommendations/note', {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note }),
-          });
-          const d = await r.json();
-          if (!r.ok) throw new Error(d.error || 'Server error.');
-          myPickNote = note;
-          showToast(note ? 'Note saved.' : 'Note removed.');
-          onSuccess();
-        } catch(err) {
-          status.textContent = err.message;
-          saveBtn.disabled = false; saveBtn.textContent = 'Save';
-        }
-      }
-
-      // Use event delegation so pencil still works after cancel restores DOM
-      inner.addEventListener('click', e => {
-        if (inner.querySelector('.ap-note-edit')) return; // already editing
-
-        // Pencil clicked — inline edit the existing note card
-        if (e.target.closest('#ap-note-pencil-btn')) {
-          const noteDiv = inner.querySelector('.ap-pick-note[data-own]');
-          const textP   = noteDiv.querySelector('.ap-pick-note-text');
-          const byP     = noteDiv.querySelector('.ap-pick-note-by');
-          textP.hidden = true; byP.hidden = true;
-          const editEl = createNoteEditEl(myNote);
-          noteDiv.appendChild(editEl);
-          editEl.querySelector('textarea').focus();
-          editEl.querySelector('textarea').setSelectionRange(9999, 9999);
-          editEl.querySelector('.ap-note-edit-cancel-btn').addEventListener('click', () => {
-            editEl.remove(); textP.hidden = false; byP.hidden = false;
-          });
-          editEl.querySelector('.ap-note-edit-save-btn').addEventListener('click', () =>
-            saveNoteEl(editEl, () => openAlbumPanel(_panelSpotifyId))
-          );
-        }
-
-        // "+ Add a note" clicked — inline editor appears below action bar
-        if (e.target.closest('#ap-note-add-btn')) {
-          const addBtn    = inner.querySelector('#ap-note-add-btn');
-          const actionBar = inner.querySelector('.ap-action-bar');
-          addBtn.hidden = true;
-          const editEl = createNoteEditEl(null);
-          editEl.classList.add('ap-note-edit--add');
-          actionBar.insertAdjacentElement('afterend', editEl);
-          editEl.querySelector('textarea').focus();
-          editEl.querySelector('.ap-note-edit-cancel-btn').addEventListener('click', () => {
-            editEl.remove(); addBtn.hidden = false;
-          });
-          editEl.querySelector('.ap-note-edit-save-btn').addEventListener('click', () =>
-            saveNoteEl(editEl, () => openAlbumPanel(_panelSpotifyId))
-          );
-        }
-      });
-
-      // Login prompt
-      inner.querySelector('#ap-login-prompt-btn')?.addEventListener('click', () => {
-        closeAlbumPanel();
-        openModal('modal-login');
-      });
-
-      // Comment form
-      const form = inner.querySelector('#ap-comment-form');
-      if (form) {
-        form.addEventListener('submit', async e => {
-          e.preventDefault();
-          const input  = document.getElementById('ap-comment-input');
-          const status = document.getElementById('ap-comment-status');
-          const submit = form.querySelector('[type=submit]');
-          const body   = input.value.trim();
-          if (!body) return;
-
-          submit.disabled = true; submit.textContent = 'Posting…';
-          status.textContent = ''; status.className = 'form-status';
-
-          try {
-            const r = await fetch(`/albums/${encodeURIComponent(album.spotifyId)}/comments`, {
-              method:  'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify({
-                body, title: album.title, artist: album.artist,
-                coverUrl: album.coverUrl, releaseYear: album.releaseYear,
-                spotifyId: album.spotifyId,
-              }),
-            });
-            const d = await r.json();
-            if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
-            const list = document.getElementById('ap-comments-list');
-            const div  = document.createElement('div');
-            div.innerHTML = commentItemHtml(d.comment);
-            list.prepend(div.firstElementChild);
-            input.value = '';
-          } catch {
-            status.textContent = 'Failed to post comment.';
-            status.className   = 'form-status err';
-          } finally {
-            submit.disabled = false; submit.textContent = 'Post';
-          }
-        });
-      }
-    }
-
-    function commentItemHtml(c) {
-      const name = c.username || 'member';
-      return `
-        <div class="comment-item">
-          <span class="comment-author">${esc(name)}</span>
-          <span class="comment-date">${fmtDate(c.createdAt)}</span>
-          <p class="comment-body">${esc(c.body)}</p>
-        </div>
-      `;
-    }
-
-    function renderCommentsHtml(comments) {
-      if (!comments.length) return '<p class="ap-no-comments">No comments yet.</p>';
-      return comments.map(commentItemHtml).join('');
-    }
-
-    function playTrack(previewUrl, trackId) {
-      if (_playingTrackId === trackId) {
-        // Toggle pause/resume on same track
-        if (_audio.paused) {
-          _audio.play();
-          updatePlayButtons(trackId, true);
-        } else {
-          _audio.pause();
-          updatePlayButtons(trackId, false);
-        }
-        return;
-      }
-      // Switch to new track
-      _audio.pause();
-      _audio.src     = previewUrl;
-      _playingTrackId = trackId;
-      _audio.play().catch(() => {}); // autoplay may be blocked silently
-      updatePlayButtons(trackId, true);
-    }
-
-    function updatePlayButtons(activeTrackId, isPlaying) {
-      document.querySelectorAll('.track-play-btn').forEach(btn => {
-        const isThis = btn.dataset.trackId === activeTrackId;
-        btn.innerHTML = (isThis && isPlaying) ? pauseIcon() : playIcon();
-      });
-    }
 
     // ── Init ───────────────────────────────────────────────
     (async () => {
-      await refreshAuth();
-      await loadLeaderboard();
-      loadCarousel();
+      me = await initHeader({ active: null });
+      if (me) maybeShowSplash();
+
+      // Wire header auth events (for home-page modals)
+      window.addEventListener('hdr:login', () => openModal('modal-login'));
+      window.addEventListener('hdr:join',  () => openModal('modal-register'));
+      window.addEventListener('hdr:spotify', () => {
+        if (!me) { openModal('modal-login'); return; }
+        handleSpotifyBtnClick();
+      });
+
+      // Update UI based on auth
+      if (me) {
+        document.getElementById('my-pick-section').hidden = false;
+        loadMyPick();
+        loadMyLists();
+        checkSpotifyStatus();
+      }
+
+      loadLeaderboard();
       loadRecentPicks();
+      loadCarousel();
+
+      // Handle ?supported=1 (Stripe success redirect)
+      if (new URLSearchParams(location.search).get('supported') === '1') {
+        sessionStorage.removeItem('arvl_u3'); // force re-fetch so isSupporter updates in header
+        showToast('Thank you for supporting ARVL ★');
+        history.replaceState(null, '', '/');
+      }
+
+      // Handle ?verified=1
       if (new URLSearchParams(location.search).get('verified') === '1') {
         sessionStorage.setItem('freshVerify', '1');
         showToast('Email verified! Log in to get started.');
         history.replaceState(null, '', '/');
         setTimeout(() => openModal('modal-login'), 400);
       }
+
+      // Handle ?spotify_connected and ?spotify_error
+      const p = new URLSearchParams(location.search);
+      if (p.has('spotify_connected')) { showToast('Spotify connected!'); history.replaceState({}, '', '/'); }
+      else if (p.has('spotify_error')) { showToast('Spotify connection failed.', 'err'); history.replaceState({}, '', '/'); }
     })();
 
     // ── Landing carousel ───────────────────────────────────
@@ -1989,15 +1348,48 @@
         card.className = 'rp-card';
         const bg = p.coverUrl ? `style="background-image:url('${esc(p.coverUrl)}')"` : '';
         card.innerHTML = `
-          <button class="rp-card-btn" aria-label="Open ${esc(p.title)}">
-            <div class="rp-cover" ${bg}></div>
+          <div class="rp-card-btn" role="button" tabindex="0" aria-label="Open ${esc(p.title)}">
+            <div class="rp-cover" ${bg}>
+              ${me ? `<div class="card-actions">
+                <button class="ca-btn ca-stream" title="Stream" data-action="stream">
+                  <svg viewBox="0 0 24 24" width="9" height="9" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                </button>
+                <button class="ca-btn ca-add" title="Add to collection" data-action="add">
+                  <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><g class="icon-plus"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></g><polyline class="icon-check" points="4,13 9,18 20,7"/></svg>
+                </button>
+                <button class="ca-btn ca-ll" title="Listen later" data-action="ll">
+                  <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,15"/></svg>
+                </button>
+              </div>` : ''}
+            </div>
             <div class="rp-body">
               <p class="rp-title">${esc(p.title)}</p>
               <p class="rp-artist">${esc(p.artist)}</p>
             </div>
-          </button>
+          </div>
         `;
-        card.querySelector('.rp-card-btn').addEventListener('click', () => openAlbumPanel(p.spotifyId, p));
+        card.querySelector('.rp-card-btn').addEventListener('click', () => { location.href = '/album/' + p.spotifyId; });
+        card.querySelectorAll('.ca-btn').forEach(btn => {
+          btn.addEventListener('click', async e => {
+            e.stopPropagation();
+            const action = btn.dataset.action;
+            if (action === 'stream') {
+              openStreamPop(btn, p.title, p.artist, p.spotifyId);
+            } else if (action === 'add') {
+              try {
+                const r = await fetch(`/crate/${encodeURIComponent(p.spotifyId)}`, { method: 'POST' });
+                if (r.ok) { const d = await r.json(); btn.classList.toggle('ca-btn--active', d.inCrate); _myCrateIds[d.inCrate ? 'add' : 'delete'](p.spotifyId); showToast(d.inCrate ? `Added to <a class="toast-link" href="/u/${encodeURIComponent(me.username || me.email.split('@')[0])}?tab=crate">Collection</a>` : 'Removed from Collection'); }
+              } catch {}
+            } else if (action === 'll') {
+              try {
+                const r = await fetch(`/listen-later/${encodeURIComponent(p.spotifyId)}`, { method: 'POST' });
+                if (r.ok) { const d = await r.json(); btn.classList.toggle('ca-btn--active', d.inListenLater); _myLLIds[d.inListenLater ? 'add' : 'delete'](p.spotifyId); showToast(d.inListenLater ? `Added to <a class="toast-link" href="/u/${encodeURIComponent(me.username || me.email.split('@')[0])}?tab=later">Listen Later</a>` : 'Removed from Listen Later'); }
+              } catch {}
+            }
+          });
+        });
+        card.querySelector('.ca-add')?.classList.toggle('ca-btn--active', _myCrateIds.has(p.spotifyId));
+        card.querySelector('.ca-ll')?.classList.toggle('ca-btn--active', _myLLIds.has(p.spotifyId));
         return card;
       };
 
@@ -2012,9 +1404,9 @@
         picks.slice(0, 6).forEach(p => grid.appendChild(makeCard(p)));
       } else {
         [...picks, ...picks].forEach(p => grid.appendChild(makeCard(p)));
-        grid.addEventListener('scroll', () => {
-          const half = grid.scrollWidth / 2;
-          if (grid.scrollLeft >= half) grid.scrollLeft -= half;
+        wrap.addEventListener('scroll', () => {
+          const half = wrap.scrollWidth / 2;
+          if (wrap.scrollLeft >= half) wrap.scrollLeft -= half;
         });
       }
 
@@ -2096,6 +1488,42 @@
     </div>
   </footer>
 
+  <!-- ── Splash modal ───────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-splash" hidden>
+    <div class="modal modal--splash" role="dialog" aria-modal="true" aria-labelledby="splash-title">
+      <button class="modal-close" id="splash-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <p class="splash-eyebrow">Something new</p>
+      <h2 class="modal-title" id="splash-title">We're experimenting.</h2>
+      <p class="splash-body">ARVL is still young, and album discovery is still the whole point. But we're trying some things.</p>
+      <div class="splash-features">
+        <div class="splash-feature">
+          <span class="splash-feature-label">The Shelf</span>
+          <span class="splash-feature-desc">Save albums to your Collection or Listen Later list. Build a personal shelf of what you've heard and what's next.</span>
+        </div>
+        <div class="splash-feature">
+          <span class="splash-feature-label">Comments &amp; Likes</span>
+          <span class="splash-feature-desc">Leave notes on any album. Like what other members are saying. It's small, but it's something.</span>
+        </div>
+        <div class="splash-feature">
+          <span class="splash-feature-label">Follow &amp; Feed</span>
+          <span class="splash-feature-desc">Follow other members and see what they're picking, collecting, and listening to in the Community feed.</span>
+        </div>
+        <div class="splash-feature">
+          <span class="splash-feature-label">Discussion</span>
+          <span class="splash-feature-desc">A board for all of it — feature requests, questions, sharing taste, or just saying hi.</span>
+        </div>
+        <div class="splash-feature">
+          <span class="splash-feature-label">Notifications</span>
+          <span class="splash-feature-desc">Get notified when someone likes your picks, comments, or replies.</span>
+        </div>
+      </div>
+      <p class="splash-footer">We're figuring this out as we go. Come experiment with us.</p>
+      <button class="btn btn-solid splash-cta" id="splash-ok">Got it</button>
+    </div>
+  </div>
+
   <!-- ── About modal ────────────────────────────────────── -->
   <div class="modal-overlay" id="modal-about" hidden>
     <div class="modal modal--about" role="dialog" aria-modal="true">
@@ -2158,6 +1586,17 @@
   </div>
 
   <script>
+    // ── Splash modal ────────────────────────────────────────
+    function closeSplash() {
+      closeModal('modal-splash');
+      try { localStorage.setItem(SPLASH_KEY, '1'); } catch {}
+    }
+    document.getElementById('splash-ok').addEventListener('click', closeSplash);
+    document.getElementById('splash-close').addEventListener('click', closeSplash);
+    document.getElementById('modal-splash').addEventListener('click', e => {
+      if (e.target === document.getElementById('modal-splash')) closeSplash();
+    });
+
     // ── Close handlers for late-rendered modals ────────────
     ['modal-about', 'modal-feedback', 'modal-privacy'].forEach(id => {
       const overlay = document.getElementById(id);
@@ -2196,5 +1635,6 @@
       }
     });
   </script>
+
 </body>
 </html>

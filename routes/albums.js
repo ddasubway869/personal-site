@@ -1,8 +1,9 @@
 'use strict';
-const express     = require('express');
-const { getDb }   = require('../db');
-const { getAlbum } = require('../lib/spotify');
-const requireAuth = require('../middleware/requireAuth');
+const express          = require('express');
+const { getDb }        = require('../db');
+const { getAlbum }     = require('../lib/spotify');
+const requireAuth      = require('../middleware/requireAuth');
+const { checkContent } = require('../middleware/contentFilter');
 
 const router = express.Router();
 
@@ -122,9 +123,20 @@ router.get('/:spotifyId', async (req, res) => {
       const [albumData, db] = await Promise.all([fetchDeezerAlbum(deezerId), getDb()]);
       if (!albumData) return res.status(502).json({ error: 'Could not load album from Deezer.' });
 
+      // Upsert Deezer album into DB so crate/listen-later routes can find it
+      await db.run(
+        `INSERT INTO albums (spotify_id, title, artist, cover_url, release_year)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(spotify_id) DO UPDATE SET
+           title=excluded.title, artist=excluded.artist,
+           cover_url=excluded.cover_url, release_year=excluded.release_year`,
+        albumData.spotifyId, albumData.title, albumData.artist,
+        albumData.coverUrl ?? null, albumData.releaseYear ?? null
+      );
+
       const weekKey = isoWeekKey();
       const userId  = req.session?.userId ?? null;
-      const [pickRow, albumDesc, artistBio, pickNotes, listenRow, userListenRow] = await Promise.all([
+      const [pickRow, albumDesc, artistBio, pickNotes, weekPickersRows, listenRow, userListenRow, userCrateRow, userListenLaterRow] = await Promise.all([
         db.get(
           `SELECT COUNT(r.id) AS count FROM recommendations r JOIN albums a ON a.id = r.album_id WHERE a.spotify_id = ? AND r.week_key = ?`,
           spotifyId, weekKey
@@ -132,11 +144,34 @@ router.get('/:spotifyId', async (req, res) => {
         getAlbumDescription(albumData.artist, albumData.title),
         getArtistBio(albumData.artist),
         db.all(
-          `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username, r.note
+          `SELECT r.id,
+                  COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username,
+                  u.is_supporter AS isSupporter,
+                  r.note,
+                  (SELECT COUNT(*) FROM recommendation_likes rl WHERE rl.recommendation_id = r.id) AS likeCount
            FROM   recommendations r JOIN users u ON u.id = r.user_id JOIN albums a ON a.id = r.album_id
            WHERE  a.spotify_id = ? AND r.note IS NOT NULL AND trim(r.note) != ''
            ORDER  BY r.created_at DESC LIMIT 6`,
           spotifyId
+        ),
+        userId ? db.all(
+          `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username,
+                  CASE WHEN uf.id IS NOT NULL THEN 1 ELSE 0 END AS isFollowing
+           FROM   recommendations r
+           JOIN   users u  ON u.id = r.user_id
+           JOIN   albums a ON a.id = r.album_id
+           LEFT   JOIN user_follows uf ON uf.follower_id = ? AND uf.following_id = u.id
+           WHERE  a.spotify_id = ? AND r.week_key = ? AND r.user_id != ?
+           ORDER  BY r.created_at ASC LIMIT 20`,
+          userId, spotifyId, weekKey, userId
+        ) : db.all(
+          `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username, 0 AS isFollowing
+           FROM   recommendations r
+           JOIN   users u  ON u.id = r.user_id
+           JOIN   albums a ON a.id = r.album_id
+           WHERE  a.spotify_id = ? AND r.week_key = ?
+           ORDER  BY r.created_at ASC LIMIT 20`,
+          spotifyId, weekKey
         ),
         db.get(
           `SELECT COUNT(*) AS n FROM listens l JOIN albums a ON a.id = l.album_id WHERE a.spotify_id = ? AND l.week_key = ?`,
@@ -146,7 +181,28 @@ router.get('/:spotifyId', async (req, res) => {
           `SELECT l.id FROM listens l JOIN albums a ON a.id = l.album_id WHERE l.user_id = ? AND a.spotify_id = ? AND l.week_key = ?`,
           userId, spotifyId, weekKey
         ) : Promise.resolve(null),
+        userId ? db.get(
+          `SELECT c.id FROM crates c JOIN albums a ON a.id = c.album_id WHERE c.user_id = ? AND a.spotify_id = ?`,
+          userId, spotifyId
+        ) : Promise.resolve(null),
+        userId ? db.get(
+          `SELECT ll.id FROM listen_later ll JOIN albums a ON a.id = ll.album_id WHERE ll.user_id = ? AND a.spotify_id = ?`,
+          userId, spotifyId
+        ) : Promise.resolve(null),
       ]);
+
+      // Attach isLiked to pick notes
+      if (userId && pickNotes.length) {
+        const recIds   = pickNotes.map(n => n.id);
+        const liked    = await db.all(
+          `SELECT recommendation_id FROM recommendation_likes WHERE user_id = ? AND recommendation_id IN (${recIds.map(() => '?').join(',')})`,
+          userId, ...recIds
+        );
+        const likedSet = new Set(liked.map(l => l.recommendation_id));
+        pickNotes.forEach(n => { n.isLiked = likedSet.has(n.id); });
+      } else {
+        pickNotes.forEach(n => { n.isLiked = false; });
+      }
 
       const description       = albumDesc || artistBio || null;
       const descriptionSource = albumDesc ? 'album' : (artistBio ? 'artist' : null);
@@ -155,12 +211,15 @@ router.get('/:spotifyId', async (req, res) => {
         album:             albumData,
         tracks:            albumData.tracks,
         weekPickCount:     pickRow?.count ?? 0,
+        weekPickers:       weekPickersRows,
         appleMusicUrl:     null,
         description,
         descriptionSource,
         pickNotes,
         listenCount:       listenRow?.n ?? 0,
         isListening:       !!userListenRow,
+        isInCrate:         !!userCrateRow,
+        isInListenLater:   !!userListenLaterRow,
         _deezer:           true,
       });
     } catch (err) {
@@ -227,7 +286,7 @@ router.get('/:spotifyId', async (req, res) => {
 
     // ── Phase 2 — all derived lookups run in parallel ────
     const userId = req.session?.userId ?? null;
-    const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes, listenRow, userListenRow] = await Promise.all([
+    const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes, weekPickersRows, listenRow, userListenRow, userCrateRow, userListenLaterRow] = await Promise.all([
       db.get(
         // Also count picks from any dz_* alias of this album (same title+artist)
         // so pick counts survive the Spotify-outage / Deezer-fallback split.
@@ -245,8 +304,11 @@ router.get('/:spotifyId', async (req, res) => {
       getAlbumDescription(albumData.artist, albumData.title),
       getArtistBio(albumData.artist),
       db.all(
-        `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username,
-                r.note
+        `SELECT r.id,
+                COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username,
+                u.is_supporter AS isSupporter,
+                r.note,
+                (SELECT COUNT(*) FROM recommendation_likes rl WHERE rl.recommendation_id = r.id) AS likeCount
          FROM   recommendations r
          JOIN   users  u ON u.id  = r.user_id
          JOIN   albums a ON a.id  = r.album_id
@@ -256,6 +318,34 @@ router.get('/:spotifyId', async (req, res) => {
          LIMIT  6`,
         spotifyId
       ),
+      userId ? db.all(
+        `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username,
+                CASE WHEN uf.id IS NOT NULL THEN 1 ELSE 0 END AS isFollowing
+         FROM   recommendations r
+         JOIN   users u  ON u.id = r.user_id
+         JOIN   albums a ON a.id = r.album_id
+         LEFT   JOIN user_follows uf ON uf.follower_id = ? AND uf.following_id = u.id
+         WHERE  r.week_key = ?
+           AND (a.spotify_id = ?
+                OR (a.spotify_id LIKE 'dz_%'
+                    AND LOWER(a.title)  = LOWER(?)
+                    AND LOWER(a.artist) = LOWER(?)))
+           AND  r.user_id != ?
+         ORDER  BY r.created_at ASC LIMIT 20`,
+        userId, weekKey, spotifyId, albumData.title, albumData.artist, userId
+      ) : db.all(
+        `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username, 0 AS isFollowing
+         FROM   recommendations r
+         JOIN   users u  ON u.id = r.user_id
+         JOIN   albums a ON a.id = r.album_id
+         WHERE  r.week_key = ?
+           AND (a.spotify_id = ?
+                OR (a.spotify_id LIKE 'dz_%'
+                    AND LOWER(a.title)  = LOWER(?)
+                    AND LOWER(a.artist) = LOWER(?)))
+         ORDER  BY r.created_at ASC LIMIT 20`,
+        weekKey, spotifyId, albumData.title, albumData.artist
+      ),
       db.get(
         `SELECT COUNT(*) AS n FROM listens l JOIN albums a ON a.id = l.album_id WHERE a.spotify_id = ? AND l.week_key = ?`,
         spotifyId, weekKey
@@ -264,7 +354,28 @@ router.get('/:spotifyId', async (req, res) => {
         `SELECT l.id FROM listens l JOIN albums a ON a.id = l.album_id WHERE l.user_id = ? AND a.spotify_id = ? AND l.week_key = ?`,
         userId, spotifyId, weekKey
       ) : Promise.resolve(null),
+      userId ? db.get(
+        `SELECT c.id FROM crates c JOIN albums a ON a.id = c.album_id WHERE c.user_id = ? AND a.spotify_id = ?`,
+        userId, spotifyId
+      ) : Promise.resolve(null),
+      userId ? db.get(
+        `SELECT ll.id FROM listen_later ll JOIN albums a ON a.id = ll.album_id WHERE ll.user_id = ? AND a.spotify_id = ?`,
+        userId, spotifyId
+      ) : Promise.resolve(null),
     ]);
+
+    // Attach isLiked to pick notes
+    if (userId && pickNotes.length) {
+      const recIds   = pickNotes.map(n => n.id);
+      const liked    = await db.all(
+        `SELECT recommendation_id FROM recommendation_likes WHERE user_id = ? AND recommendation_id IN (${recIds.map(() => '?').join(',')})`,
+        userId, ...recIds
+      );
+      const likedSet = new Set(liked.map(l => l.recommendation_id));
+      pickNotes.forEach(n => { n.isLiked = likedSet.has(n.id); });
+    } else {
+      pickNotes.forEach(n => { n.isLiked = false; });
+    }
 
     const description       = albumDesc || artistBio || null;
     const descriptionSource = albumDesc ? 'album' : (artistBio ? 'artist' : null);
@@ -273,17 +384,55 @@ router.get('/:spotifyId', async (req, res) => {
       album:             albumData,
       tracks:            albumData.tracks,
       weekPickCount:     pickRow?.count ?? 0,
+      weekPickers:       weekPickersRows,
       appleMusicUrl,
       description,
       descriptionSource,
       pickNotes,
       listenCount:       listenRow?.n ?? 0,
       isListening:       !!userListenRow,
+      isInCrate:         !!userCrateRow,
+      isInListenLater:   !!userListenLaterRow,
       _cached:           fromCache,
     });
   } catch (err) {
     console.error('Album fetch error:', err.message);
     res.status(500).json({ error: 'Failed to load album.' });
+  }
+});
+
+// ── GET /albums/:spotifyId/previews ──────────────────────
+// Fetches 30-second preview URLs from Deezer for albums where Spotify
+// doesn't provide them (major-label albums often have previewUrl: null).
+// Returns { previews: { "track name lowercase": "https://cdn.deezer.com/...mp3" } }
+router.get('/:spotifyId/previews', async (req, res) => {
+  try {
+    const db     = await getDb();
+    const dbRow  = await db.get('SELECT title, artist FROM albums WHERE spotify_id = ?', req.params.spotifyId);
+    if (!dbRow) return res.json({ previews: {} });
+
+    const q          = encodeURIComponent(`artist:"${dbRow.artist}" album:"${dbRow.title}"`);
+    const c1         = new AbortController();
+    const t1         = setTimeout(() => c1.abort(), 4000);
+    const searchRes  = await fetch(`https://api.deezer.com/search/album?q=${q}&limit=5`, { signal: c1.signal });
+    clearTimeout(t1);
+    const searchData = await searchRes.json();
+    const dzAlbum    = searchData.data?.[0];
+    if (!dzAlbum) return res.json({ previews: {} });
+
+    const c2        = new AbortController();
+    const t2        = setTimeout(() => c2.abort(), 4000);
+    const tracksRes = await fetch(`https://api.deezer.com/album/${dzAlbum.id}/tracks?limit=50`, { signal: c2.signal });
+    clearTimeout(t2);
+    const tracksData = await tracksRes.json();
+
+    const previews = {};
+    for (const t of (tracksData.data ?? [])) {
+      if (t.preview) previews[t.title.toLowerCase()] = t.preview;
+    }
+    res.json({ previews });
+  } catch {
+    res.json({ previews: {} });
   }
 });
 
@@ -293,12 +442,16 @@ router.get('/:spotifyId/comments', async (req, res) => {
   const { spotifyId } = req.params;
 
   try {
-    const db   = await getDb();
-    const rows = await db.all(
+    const db     = await getDb();
+    const userId = req.session?.userId ?? null;
+    const rows   = await db.all(
       `SELECT c.id,
               c.body,
               c.created_at                                                          AS createdAt,
-              COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1))    AS username
+              COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1))    AS username,
+              u.is_supporter                                                         AS isSupporter,
+              (SELECT COUNT(*) FROM comment_replies r WHERE r.comment_id = c.id)   AS replyCount,
+              (SELECT COUNT(*) FROM comment_likes  l WHERE l.comment_id = c.id)    AS likeCount
        FROM   comments c
        JOIN   users  u ON u.id = c.user_id
        JOIN   albums a ON a.id = c.album_id
@@ -306,6 +459,17 @@ router.get('/:spotifyId/comments', async (req, res) => {
        ORDER  BY c.created_at DESC`,
       spotifyId
     );
+    if (userId && rows.length) {
+      const ids     = rows.map(r => r.id);
+      const liked   = await db.all(
+        `SELECT comment_id FROM comment_likes WHERE user_id = ? AND comment_id IN (${ids.map(() => '?').join(',')})`,
+        userId, ...ids
+      );
+      const likedSet = new Set(liked.map(l => l.comment_id));
+      rows.forEach(r => { r.isLiked = likedSet.has(r.id); });
+    } else {
+      rows.forEach(r => { r.isLiked = false; });
+    }
     res.json({ comments: rows });
   } catch (err) {
     console.error('Comments fetch error:', err.message);
@@ -326,22 +490,26 @@ router.post('/:spotifyId/comments', requireAuth, async (req, res) => {
   if (body.length > 1000) {
     return res.status(400).json({ error: 'Comment must be 1000 characters or fewer.' });
   }
+  const _chk1 = checkContent(body);
+  if (_chk1.flagged) return res.status(400).json({ error: _chk1.message });
 
   try {
     const db = await getDb();
 
-    // Upsert album so we always have a local album_id to foreign-key against
+    // Upsert album so we always have a local album_id to foreign-key against.
+    // Only overwrite existing title/artist if the incoming values are real (not a fallback ID).
+    const safeTitle = (title && title !== spotifyId) ? title : null;
     await db.run(
       `INSERT INTO albums (spotify_id, title, artist, cover_url, release_year)
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(spotify_id) DO UPDATE
-         SET title        = excluded.title,
-             artist       = excluded.artist,
-             cover_url    = excluded.cover_url,
-             release_year = excluded.release_year`,
+         SET title        = COALESCE(excluded.title, title),
+             artist       = COALESCE(excluded.artist, artist),
+             cover_url    = COALESCE(excluded.cover_url, cover_url),
+             release_year = COALESCE(excluded.release_year, release_year)`,
       spotifyId,
-      title       ?? spotifyId,
-      artist      ?? '',
+      safeTitle   ?? null,
+      artist      ?? null,
       coverUrl    ?? null,
       releaseYear ?? null
     );
@@ -356,18 +524,69 @@ router.post('/:spotifyId/comments', requireAuth, async (req, res) => {
     // Fetch the saved comment with username to return to client
     const saved = await db.get(
       `SELECT c.id, c.body, c.created_at AS createdAt,
-              COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username
+              COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username,
+              u.is_supporter AS isSupporter
        FROM   comments c
        JOIN   users u ON u.id = c.user_id
        WHERE  c.user_id = ? AND c.album_id = ?
        ORDER  BY c.id DESC LIMIT 1`,
       req.session.userId, album.id
     );
+    saved.likeCount = 0;
+    saved.isLiked   = false;
 
     res.json({ ok: true, comment: saved });
   } catch (err) {
     console.error('Comment post error:', err.message);
     res.status(500).json({ error: 'Failed to post comment.' });
+  }
+});
+
+// ── GET /albums/:spotifyId/comments/:commentId/replies ────
+router.get('/:spotifyId/comments/:commentId/replies', async (req, res) => {
+  try {
+    const db      = await getDb();
+    const replies = await db.all(
+      `SELECT r.id, r.body, r.created_at AS createdAt,
+              COALESCE(u.username, SUBSTR(u.email,1,INSTR(u.email,'@')-1)) AS username
+       FROM   comment_replies r JOIN users u ON u.id = r.user_id
+       WHERE  r.comment_id = ? ORDER BY r.created_at ASC`,
+      req.params.commentId
+    );
+    res.json({ replies });
+  } catch (err) {
+    console.error('Comment replies fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to load replies.' });
+  }
+});
+
+// ── POST /albums/:spotifyId/comments/:commentId/reply ─────
+router.post('/:spotifyId/comments/:commentId/reply', requireAuth, async (req, res) => {
+  const body = (req.body.body || '').trim();
+  if (!body)              return res.status(400).json({ error: 'Reply body is required.' });
+  if (body.length > 1000) return res.status(400).json({ error: 'Max 1000 characters.' });
+  const _chk2 = checkContent(body);
+  if (_chk2.flagged) return res.status(400).json({ error: _chk2.message });
+  try {
+    const db      = await getDb();
+    const comment = await db.get('SELECT id FROM comments WHERE id = ?', req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'Comment not found.' });
+    const r    = await db.run(
+      'INSERT INTO comment_replies (user_id, comment_id, body) VALUES (?, ?, ?)',
+      req.session.userId, comment.id, body
+    );
+    const user = await db.get('SELECT username, email FROM users WHERE id = ?', req.session.userId);
+    res.json({
+      reply: {
+        id:        r.lastID,
+        body,
+        createdAt: Math.floor(Date.now() / 1000),
+        username:  user.username || user.email.split('@')[0],
+      },
+    });
+  } catch (err) {
+    console.error('Comment reply post error:', err.message);
+    res.status(500).json({ error: 'Failed to post reply.' });
   }
 });
 
@@ -427,15 +646,16 @@ router.post('/:spotifyId/rating', requireAuth, async (req, res) => {
   try {
     const db = await getDb();
 
+    const safeRatingTitle = (title && title !== spotifyId) ? title : null;
     await db.run(
       `INSERT INTO albums (spotify_id, title, artist, cover_url, release_year)
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(spotify_id) DO UPDATE
-         SET title        = excluded.title,
-             artist       = excluded.artist,
-             cover_url    = excluded.cover_url,
-             release_year = excluded.release_year`,
-      spotifyId, title ?? spotifyId, artist ?? '', coverUrl ?? null, releaseYear ?? null
+         SET title        = COALESCE(excluded.title, title),
+             artist       = COALESCE(excluded.artist, artist),
+             cover_url    = COALESCE(excluded.cover_url, cover_url),
+             release_year = COALESCE(excluded.release_year, release_year)`,
+      spotifyId, safeRatingTitle ?? null, artist ?? null, coverUrl ?? null, releaseYear ?? null
     );
 
     const album = await db.get('SELECT id FROM albums WHERE spotify_id = ?', spotifyId);

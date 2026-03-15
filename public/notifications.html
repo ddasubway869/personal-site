@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Notifications — ARVL</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="ARVL"/>
+  <link rel="stylesheet" href="/style.css?v=102"/>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  </script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main class="page-container" id="page-main">
+    <p class="ap-loading">Loading…</p>
+  </main>
+  <script src="/js/common.js"></script>
+  <script>
+  'use strict';
+
+  // Group individual like events by content item (type + contentId)
+  function groupLikes(likes) {
+    const map = new Map();
+    for (const n of likes) {
+      const key = `${n.type}::${n.contentId}`;
+      if (!map.has(key)) {
+        map.set(key, { ...n, likers: [n.fromUsername] });
+      } else {
+        map.get(key).likers.push(n.fromUsername);
+      }
+    }
+    return [...map.values()].sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  function notifLikeHtml(n) {
+    const label = n.type === 'comment_like' ? 'liked your comment'
+                : n.type === 'rec_like'     ? 'liked your pick note'
+                : n.type === 'reply_like'   ? 'liked your reply'
+                :                             'liked your post';
+    const snippet   = n.contentSnippet ? `<p class="notif-snippet">"${esc(n.contentSnippet)}"</p>` : '';
+    const albumLine = n.albumTitle     ? `<p class="notif-album">${esc(n.albumTitle)}</p>`          : '';
+    const count     = n.likers.length;
+
+    let mainText;
+    if (count >= 4) {
+      const others = count - 1;
+      const otherNames = esc(n.likers.slice(1).join(','));
+      mainText = `<p class="notif-main"><strong>${esc(n.fromUsername)}</strong> and <button class="notif-likers-btn" data-likers="${otherNames}">${others} other${others > 1 ? 's' : ''}</button> ${label}</p>`;
+    } else if (count === 1) {
+      mainText = `<p class="notif-main"><strong>${esc(n.fromUsername)}</strong> ${label}</p>`;
+    } else {
+      const rest = n.likers.slice(1).map(u => `<strong>${esc(u)}</strong>`).join(', ');
+      mainText = `<p class="notif-main"><strong>${esc(n.fromUsername)}</strong> and ${rest} ${label}</p>`;
+    }
+
+    const inner = `${mainText}${albumLine}${snippet}<span class="notif-time">${relativeTime(n.createdAt)}</span>`;
+    if (n.spotifyId) {
+      return `<a href="/album/${esc(n.spotifyId)}" class="notif-item notif-item--link">${inner}</a>`;
+    }
+    return `<div class="notif-item">${inner}</div>`;
+  }
+
+  function notifMentionHtml(n) {
+    return `
+      <div class="notif-item">
+        <p class="notif-main"><strong>${esc(n.fromUsername)}</strong> mentioned you in a reply</p>
+        <p class="notif-snippet">"${esc(n.body.length > 100 ? n.body.slice(0,100)+'…' : n.body)}"</p>
+        ${n.postSnippet ? `<p class="notif-album">↳ ${esc(n.postSnippet.slice(0,60))}${n.postSnippet.length>60?'…':''}</p>` : ''}
+        <div class="notif-item-footer">
+          <span class="notif-time">${relativeTime(n.createdAt)}</span>
+          ${n.postId ? `<a href="/community?post=${n.postId}${n.replyId ? `&reply=${n.replyId}` : ''}" class="notif-open-btn">Open →</a>` : ''}
+        </div>
+      </div>`;
+  }
+
+  (async () => {
+    const me = await initHeader({ active: 'notifications' });
+
+    if (!me) {
+      document.getElementById('page-main').innerHTML = '<p class="cp-empty">Please <a href="/">log in</a> to see notifications.</p>';
+      return;
+    }
+
+    // Mark as seen — clears the notification dot
+    const uname = me.username || me.email.split('@')[0];
+    localStorage.setItem(`notif_seen_${uname}`, Math.floor(Date.now() / 1000));
+
+    const main = document.getElementById('page-main');
+    main.innerHTML = `
+      <h1 class="page-title">Notifications</h1>
+      <div class="ap-tabs" style="margin-bottom:1.5rem">
+        <button class="ap-tab-btn ap-tab-btn--active" data-tab="mentions">Mentions</button>
+        <button class="ap-tab-btn" data-tab="likes">Likes</button>
+      </div>
+      <div id="notif-tab-mentions"><p class="ap-loading">Loading…</p></div>
+      <div id="notif-tab-likes" hidden><p class="ap-loading">Loading…</p></div>`;
+
+    document.querySelectorAll('.ap-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.ap-tab-btn').forEach(b => b.classList.toggle('ap-tab-btn--active', b === btn));
+        document.getElementById('notif-tab-mentions').hidden = btn.dataset.tab !== 'mentions';
+        document.getElementById('notif-tab-likes').hidden    = btn.dataset.tab !== 'likes';
+      });
+    });
+
+    try {
+      const r = await fetch('/notifications', { headers: { 'Accept': 'application/json' } });
+      const d = await r.json();
+      const likesEl    = document.getElementById('notif-tab-likes');
+      const mentionsEl = document.getElementById('notif-tab-mentions');
+      const grouped    = groupLikes(d.likes || []);
+      likesEl.innerHTML    = grouped.length          ? grouped.map(notifLikeHtml).join('')        : '<p class="cp-empty">No likes yet.</p>';
+      mentionsEl.innerHTML = (d.mentions||[]).length ? d.mentions.map(notifMentionHtml).join('') : '<p class="cp-empty">No mentions yet.</p>';
+
+      // Wire "X others" popover buttons
+      let _likersPop = null;
+      const closeLikersPop = () => { if (_likersPop) { _likersPop.remove(); _likersPop = null; } };
+      likesEl.querySelectorAll('.notif-likers-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.preventDefault(); e.stopPropagation();
+          if (_likersPop) { closeLikersPop(); return; }
+          const names = btn.dataset.likers.split(',').filter(Boolean);
+          const rect  = btn.getBoundingClientRect();
+          _likersPop  = document.createElement('div');
+          _likersPop.className = 'notif-likers-pop';
+          _likersPop.innerHTML = names.map(n => `<span class="notif-likers-name">${esc(n)}</span>`).join('');
+          _likersPop.style.top  = `${rect.bottom + 6}px`;
+          _likersPop.style.left = `${rect.left}px`;
+          document.body.appendChild(_likersPop);
+          setTimeout(() => document.addEventListener('click', closeLikersPop, { once: true }), 0);
+        });
+      });
+    } catch {
+      document.getElementById('notif-tab-likes').innerHTML = '<p class="cp-empty">Failed to load.</p>';
+    }
+  })();
+  </script>
+</body>
+</html>

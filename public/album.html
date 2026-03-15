@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ARVL</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="ARVL"/>
+  <link rel="stylesheet" href="/style.css?v=102"/>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  </script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main class="page-container" id="page-main">
+    <p class="ap-loading">Loading…</p>
+  </main>
+  <!-- Pick note modal -->
+  <div class="modal-overlay" id="modal-pick-note" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pick-note-title">
+      <button class="modal-close" id="pick-note-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <h2 class="modal-title" id="pick-note-title">Submit your pick</h2>
+      <div class="pick-note-album-preview" id="pick-note-preview"></div>
+      <label class="form-label" for="pick-note-input">Tell us why <span class="form-label-opt">(optional)</span></label>
+      <textarea class="pick-note-textarea" id="pick-note-input"
+        placeholder="What makes this album special?" maxlength="150" rows="3"></textarea>
+      <p class="pick-note-count"><span id="pick-note-chars">0</span> / 150</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="pick-note-cancel">Cancel</button>
+        <button class="btn btn-submit" id="pick-note-submit">Submit pick</button>
+      </div>
+      <p class="form-status" id="pick-note-status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <script src="/js/common.js"></script>
+  <script>
+  'use strict';
+
+  const spotifyId = location.pathname.split('/').filter(Boolean).pop();
+
+  const thumbUpSvg = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><rect x="2" y="11" width="4" height="11" rx="1"/></svg>`;
+
+  function fmtDuration(ms) {
+    if (!ms) return '';
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  // ── Like button wiring ──────────────────────────────────
+  function wireLikeBtns(container) {
+    container.querySelectorAll('.btn-like').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const url     = btn.dataset.likeUrl;
+        const liked   = btn.dataset.liked === '1';
+        const count   = parseInt(btn.dataset.likeCount, 10) || 0;
+        const newLiked = !liked;
+        const newCount = newLiked ? count + 1 : Math.max(0, count - 1);
+        btn.dataset.liked      = newLiked ? '1' : '0';
+        btn.dataset.likeCount  = newCount;
+        btn.classList.toggle('btn-like--active', newLiked);
+        btn.querySelector('.btn-like-count').textContent = newCount > 0 ? newCount : '';
+        try {
+          const r = await fetch(url, { method: 'POST' });
+          if (!r.ok) throw new Error();
+          const d = await r.json();
+          btn.dataset.liked     = d.liked ? '1' : '0';
+          btn.dataset.likeCount = d.count;
+          btn.classList.toggle('btn-like--active', d.liked);
+          btn.querySelector('.btn-like-count').textContent = d.count > 0 ? d.count : '';
+        } catch {
+          // Roll back
+          btn.dataset.liked     = liked ? '1' : '0';
+          btn.dataset.likeCount = count;
+          btn.classList.toggle('btn-like--active', liked);
+          btn.querySelector('.btn-like-count').textContent = count > 0 ? count : '';
+        }
+      });
+    });
+  }
+
+  // ── Comment rendering ───────────────────────────────────
+  function commentHtml(c, me) {
+    return `
+      <div class="comment-item" data-id="${c.id}">
+        <div class="comment-meta">
+          <a href="/u/${esc(c.username)}" class="username-link">${esc(c.username)}${c.isSupporter ? '<span class="supporter-star" title="ARVL Supporter">★</span>' : ''}</a>
+          <span class="cp-time">${relativeTime(c.createdAt)}</span>
+        </div>
+        <p class="comment-body">${esc(c.body)}</p>
+        <div class="comment-actions">
+          ${me ? `<button class="btn-like${c.isLiked ? ' btn-like--active' : ''}" data-like-url="/likes/comments/${c.id}" data-like-count="${c.likeCount||0}" data-liked="${c.isLiked?'1':'0'}" aria-label="Like">${thumbUpSvg}<span class="btn-like-count">${c.likeCount > 0 ? c.likeCount : ''}</span></button>` : (c.likeCount > 0 ? `<span class="cp-like-count-static">${c.likeCount}</span>` : '')}
+        </div>
+      </div>`;
+  }
+
+  // ── Render page ─────────────────────────────────────────
+  function renderPage(data, me) {
+    const { album, tracks, weekPickCount, comments, appleMusicUrl, description, descriptionSource, pickNotes, isInCrate, isInListenLater, weekPickers } = data;
+    document.title = `${album.title} — ARVL`;
+
+    const artistLinks = (album.artists && album.artists.length
+      ? album.artists.map(a => `<span class="ap-artist-name">${esc(a.name)}</span>`).join(', ')
+      : esc(album.artist));
+
+    const previewBtnHtml = `
+      <button class="track-play-btn track-play-btn--placeholder" aria-hidden="true" tabindex="-1">
+        <svg class="tpb-play"  viewBox="0 0 24 24" width="9" height="9" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        <svg class="tpb-pause" viewBox="0 0 24 24" width="9" height="9" fill="currentColor"><rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/></svg>
+      </button>`;
+    const trackRows = (tracks || []).map(t => `
+      <div class="track-row" data-track-name="${esc(t.name.toLowerCase())}">
+        ${previewBtnHtml}
+        <span class="track-num">${t.trackNumber}</span>
+        <div class="track-info">
+          <span class="track-name">${esc(t.name)}</span>
+          ${t.artist !== album.artist ? `<span class="track-feat">${esc(t.artist)}</span>` : ''}
+        </div>
+        <span class="track-duration">${fmtDuration(t.durationMs)}</span>
+      </div>`).join('');
+
+    const playBtnHtml = `
+      <button class="btn-play" id="ap-play-btn" title="Stream">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+      </button>`;
+
+    const main = document.getElementById('page-main');
+    main.innerHTML = `
+      <div class="ap-hero">
+        ${album.coverUrl ? `<div class="ap-cover ap-cover--page ap-stagger" style="background-image:url('${esc(album.coverUrl)}');animation-delay:0ms"></div>` : ''}
+        <div class="ap-meta ap-stagger" style="animation-delay:80ms">
+          <h1 class="ap-title">${esc(album.title)}</h1>
+          <p class="ap-artist">${artistLinks}</p>
+          ${album.releaseYear ? `<p class="ap-sub">${esc(album.releaseYear)}</p>` : ''}
+        </div>
+      </div>
+
+      <div class="ap-action-bar ap-stagger" style="animation-delay:160ms">
+        <div class="ap-action-left">
+          ${weekPickCount ? `<button class="ap-pick-count${weekPickers && weekPickers.length ? ' ap-pick-count--clickable' : ''}" id="ap-pick-count-btn">${weekPickCount} ${weekPickCount === 1 ? 'pick' : 'picks'} this week</button>` : ''}
+        </div>
+        <div class="ap-actions">
+          ${me ? `
+            <button class="btn-pick btn-pick--solid" id="ap-rec-btn" data-spotify-id="${esc(album.spotifyId)}">Recommend</button>` : ''}
+          ${playBtnHtml}
+          ${me ? `
+            <button class="btn-add ${isInCrate ? 'btn-add--active' : ''}" id="ap-add-btn" title="Add to collection">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <g class="icon-plus"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></g>
+                <polyline class="icon-check" points="4,13 9,18 20,7"/>
+              </svg>
+            </button>
+            <button class="btn-ll ${isInListenLater ? 'btn-ll--active' : ''}" id="ap-ll-btn" title="Listen later">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,15"/></svg>
+            </button>` : ''}
+        </div>
+      </div>
+
+      <div class="ap-main ap-stagger" style="animation-delay:240ms">
+        <div class="ap-section ap-pick-notes-section"${pickNotes && pickNotes.length ? '' : ' hidden'}>
+          <h3 class="ap-section-title">Why members picked this</h3>
+          ${(pickNotes || []).map(n => `
+            <div class="ap-pick-note" data-username="${esc(n.username)}">
+              <p class="ap-pick-note-text">"${esc(n.note)}"</p>
+              <div class="ap-pick-note-footer">
+                <p class="ap-pick-note-by">— <a href="/u/${esc(n.username)}" class="username-link">${esc(n.username)}${n.isSupporter ? '<span class="supporter-star" title="ARVL Supporter">★</span>' : ''}</a>${me?.username === n.username ? ' <button class="ap-edit-note-btn">Edit note</button>' : ''}</p>
+                ${me ? `<button class="btn-like${n.isLiked ? ' btn-like--active' : ''}" data-like-url="/likes/recommendations/${n.id}" data-like-count="${n.likeCount||0}" data-liked="${n.isLiked?'1':'0'}" aria-label="Like pick note">${thumbUpSvg}<span class="btn-like-count">${n.likeCount > 0 ? n.likeCount : ''}</span></button>` : (n.likeCount > 0 ? `<span class="cp-like-count-static">${n.likeCount}</span>` : '')}
+              </div>
+            </div>`).join('')}
+        </div>
+
+        <div class="ap-section" id="ap-comments-section">
+          <h3 class="ap-section-title">Comments</h3>
+          <div id="ap-comments-list">
+            ${(comments||[]).map(c => commentHtml(c, me)).join('')}
+          </div>
+          ${me
+            ? `<form class="ap-comment-form" id="ap-comment-form">
+                 <textarea class="ap-comment-input" id="ap-comment-input" placeholder="Add a comment…" maxlength="1000" rows="3"></textarea>
+                 <button type="submit" class="btn btn-solid ap-comment-submit">Post</button>
+                 <p class="form-status" id="ap-comment-status" aria-live="polite"></p>
+               </form>`
+            : `<div class="ap-comment-gate">
+                 <button class="btn btn-solid" onclick="window.dispatchEvent(new CustomEvent('hdr:login'))">Log in</button>
+                 <button class="btn btn-ghost" onclick="window.dispatchEvent(new CustomEvent('hdr:join'))">Join the club</button>
+               </div>`}
+        </div>
+      </div>
+
+      <div class="ap-aside ap-stagger" style="animation-delay:160ms">
+        <nav class="ap-tabs" id="ap-tabs">
+          <button class="ap-tab-btn ap-tab-btn--active" data-tab="tracks">Tracklist</button>
+          ${description ? `<button class="ap-tab-btn" data-tab="about">About</button>` : ''}
+        </nav>
+
+        <div class="ap-tab-panel" id="ap-tab-tracks">
+          <div class="ap-track-list">${trackRows || '<p class="cp-empty">No tracks available.</p>'}</div>
+        </div>
+
+        ${description ? `
+        <div class="ap-tab-panel" id="ap-tab-about" hidden>
+          <div class="ap-section">
+            <h3 class="ap-section-title">${descriptionSource === 'album' ? 'About this album' : 'About the artist'}</h3>
+            <p class="ap-description">${esc(description)}</p>
+          </div>
+        </div>` : ''}
+      </div>`;
+    main.classList.add('page-loaded', 'page-container--album');
+
+    // Tab switching
+    document.querySelectorAll('.ap-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.ap-tab-btn').forEach(b => b.classList.toggle('ap-tab-btn--active', b === btn));
+        document.querySelectorAll('.ap-tab-panel').forEach(p => { p.hidden = p.id !== `ap-tab-${btn.dataset.tab}`; });
+      });
+    });
+
+    // Pickers popover
+    let _pickersPop = null;
+    const closePickersPop = () => { if (_pickersPop) { _pickersPop.remove(); _pickersPop = null; } };
+    const pickCountBtn = document.getElementById('ap-pick-count-btn');
+    if (pickCountBtn && weekPickers && weekPickers.length) {
+      pickCountBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        document.removeEventListener('click', closePickersPop);
+        closePickersPop();
+        const rect = pickCountBtn.getBoundingClientRect();
+        _pickersPop = document.createElement('div');
+        _pickersPop.className = 'pickers-popover';
+        _pickersPop.innerHTML = weekPickers.map(p => `
+          <div class="picker-row">
+            <a href="/u/${esc(p.username)}" class="picker-name">${esc(p.username)}</a>
+          </div>`).join('');
+        _pickersPop.style.top  = `${rect.bottom + 6}px`;
+        _pickersPop.style.left = `${rect.left}px`;
+        document.body.appendChild(_pickersPop);
+        setTimeout(() => document.addEventListener('click', closePickersPop, { once: true }), 0);
+      });
+    }
+
+    // Crate button
+    document.getElementById('ap-add-btn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('ap-add-btn');
+      const r = await fetch(`/crate/${encodeURIComponent(album.spotifyId)}`, { method: 'POST' });
+      if (!r.ok) return;
+      const { inCrate } = await r.json();
+      btn.classList.toggle('btn-add--active', inCrate);
+      showToast(inCrate ? 'Added to Collection' : 'Removed from Collection');
+    });
+
+    // Listen later button
+    document.getElementById('ap-ll-btn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('ap-ll-btn');
+      const r = await fetch(`/listen-later/${encodeURIComponent(album.spotifyId)}`, { method: 'POST' });
+      if (!r.ok) return;
+      const { inListenLater } = await r.json();
+      btn.classList.toggle('btn-ll--active', inListenLater);
+      showToast(inListenLater ? 'Added to Listen Later' : 'Removed from Listen Later');
+    });
+
+    // Comment form
+    document.getElementById('ap-comment-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const input  = document.getElementById('ap-comment-input');
+      const status = document.getElementById('ap-comment-status');
+      const submit = e.target.querySelector('[type=submit]');
+      const body   = input.value.trim();
+      if (!body) return;
+      submit.disabled = true; submit.textContent = 'Posting…';
+      try {
+        const r = await fetch(`/albums/${encodeURIComponent(spotifyId)}/comments`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body, title: album.title, artist: album.artist, coverUrl: album.coverUrl, releaseYear: album.releaseYear }),
+        });
+        const d = await r.json();
+        if (!r.ok) { status.textContent = d.error || 'Failed.'; status.className = 'form-status err'; return; }
+        d.comment.likeCount = 0; d.comment.isLiked = false;
+        const list = document.getElementById('ap-comments-list');
+        const empty = list.querySelector('.cp-empty');
+        if (empty) empty.remove();
+        list.insertAdjacentHTML('afterbegin', commentHtml(d.comment, me));
+        wireLikeBtns(list);
+        input.value = '';
+      } catch { status.textContent = 'Failed.'; status.className = 'form-status err'; }
+      finally { submit.disabled = false; submit.textContent = 'Post'; }
+    });
+
+    // Wire like buttons
+    wireLikeBtns(main);
+
+    // ── Deezer 30-second track previews ──────────────────────
+    let _previewAudio = null;
+    let _activePlayBtn = null;
+
+    function stopPreview() {
+      if (_previewAudio) { _previewAudio.pause(); _previewAudio = null; }
+      if (_activePlayBtn) {
+        _activePlayBtn.classList.remove('track-play-btn--playing');
+        _activePlayBtn.closest('.track-row')?.classList.remove('track-row--playing');
+        _activePlayBtn = null;
+      }
+    }
+
+    function wireTrackPreviews() {
+      main.querySelectorAll('.track-play-btn').forEach(btn => {
+        if (btn._previewWired) return;
+        btn._previewWired = true;
+        btn.addEventListener('click', () => {
+          const url = btn.closest('.track-row').dataset.preview;
+          if (!url) return;
+          if (_activePlayBtn === btn) {
+            if (_previewAudio.paused) {
+              _previewAudio.play();
+              btn.classList.add('track-play-btn--playing');
+              btn.closest('.track-row').classList.add('track-row--playing');
+            } else {
+              _previewAudio.pause();
+              btn.classList.remove('track-play-btn--playing');
+              btn.closest('.track-row').classList.remove('track-row--playing');
+            }
+            return;
+          }
+          stopPreview();
+          _previewAudio = new Audio(url);
+          _activePlayBtn = btn;
+          btn.classList.add('track-play-btn--playing');
+          btn.closest('.track-row').classList.add('track-row--playing');
+          _previewAudio.play().catch(() => {});
+          _previewAudio.addEventListener('ended', stopPreview, { once: true });
+        });
+      });
+    }
+
+    // Fetch Deezer preview URLs and reveal placeholder play buttons
+    fetch(`/albums/${encodeURIComponent(album.spotifyId)}/previews`)
+      .then(r => r.json())
+      .then(({ previews }) => {
+        if (!previews || !Object.keys(previews).length) return;
+        main.querySelectorAll('.track-row').forEach(row => {
+          const url = previews[row.dataset.trackName];
+          const btn = row.querySelector('.track-play-btn--placeholder');
+          if (!btn) return;
+          if (!url) return;
+          row.dataset.preview = url;
+          btn.classList.remove('track-play-btn--placeholder');
+          btn.removeAttribute('aria-hidden');
+          btn.removeAttribute('tabindex');
+          btn.setAttribute('aria-label', `Preview ${row.querySelector('.track-name')?.textContent || ''}`);
+        });
+        wireTrackPreviews();
+      })
+      .catch(() => {});
+
+    // Stop audio if user navigates away
+    window.addEventListener('pagehide', stopPreview, { once: true });
+
+    // Play / Stream popover
+    const playBtn = document.getElementById('ap-play-btn');
+    if (playBtn) {
+      let _streamPop = null;
+      const closeStreamPop = () => { if (_streamPop) { _streamPop.remove(); _streamPop = null; } };
+      playBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (_streamPop) { closeStreamPop(); return; }
+        const spotifyHref    = album._deezer
+          ? `https://open.spotify.com/search/${encodeURIComponent(album.title + ' ' + album.artist)}`
+          : `https://open.spotify.com/album/${album.spotifyId}`;
+        const appleMusicHref = appleMusicUrl || `https://music.apple.com/us/search?term=${encodeURIComponent(album.title + ' ' + album.artist)}`;
+        const tidalHref      = `https://tidal.com/search/albums?q=${encodeURIComponent(album.title + ' ' + album.artist)}`;
+        const deezerHref     = `https://www.deezer.com/search/${encodeURIComponent((album.title + ' ' + album.artist).toLowerCase())}/album`;
+        const ytMusicHref    = `https://music.youtube.com/search?q=${encodeURIComponent(album.title + ' ' + album.artist)}`;
+        const rect = playBtn.getBoundingClientRect();
+        _streamPop = document.createElement('div');
+        _streamPop.className = 'stream-popover';
+        _streamPop.innerHTML = `
+          <a class="stream-option" href="${spotifyHref}"    target="_blank" rel="noopener">Spotify</a>
+          <a class="stream-option" href="${appleMusicHref}" target="_blank" rel="noopener">Apple Music</a>
+          <a class="stream-option" href="${ytMusicHref}"    target="_blank" rel="noopener">YouTube Music</a>
+          <a class="stream-option" href="${tidalHref}"      target="_blank" rel="noopener">Tidal</a>
+          <a class="stream-option" href="${deezerHref}"     target="_blank" rel="noopener">Deezer</a>
+        `;
+        _streamPop.style.top  = `${rect.bottom + 6}px`;
+        _streamPop.style.left = `${rect.left}px`;
+        document.body.appendChild(_streamPop);
+        setTimeout(() => document.addEventListener('click', closeStreamPop, { once: true }), 0);
+      });
+    }
+  }
+
+  // ── Modal helpers ──────────────────────────────────────
+  function openPickModal() { document.getElementById('modal-pick-note').hidden = false; }
+  function closePickModal() { document.getElementById('modal-pick-note').hidden = true; }
+
+  document.getElementById('pick-note-close').addEventListener('click', closePickModal);
+  document.getElementById('pick-note-cancel').addEventListener('click', closePickModal);
+  document.getElementById('modal-pick-note').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closePickModal();
+  });
+  document.getElementById('pick-note-input').addEventListener('input', e => {
+    document.getElementById('pick-note-chars').textContent = e.target.value.length;
+  });
+
+  let _albumForPick = null;
+  let _pickEditMode = false;
+
+  function openPickNoteModal(album, existingNote = null, forceEdit = false) {
+    _albumForPick = album;
+    _pickEditMode = forceEdit || existingNote !== null;
+    const bg = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
+    document.getElementById('pick-note-preview').innerHTML = `
+      <div class="pick-note-cover" ${bg}></div>
+      <div class="pick-note-meta">
+        <p class="pick-note-title">${esc(album.title)}</p>
+        <p class="pick-note-artist">${esc(album.artist)}</p>
+      </div>`;
+    const input = document.getElementById('pick-note-input');
+    input.value = existingNote ?? '';
+    document.getElementById('pick-note-chars').textContent = input.value.length;
+    document.getElementById('pick-note-status').textContent = '';
+    const hasExisting = existingNote !== null && existingNote !== '';
+    document.getElementById('pick-note-title').textContent =
+      _pickEditMode ? (hasExisting ? 'Edit your note' : 'Add your note') : 'Submit your pick';
+    document.getElementById('pick-note-submit').textContent = _pickEditMode ? 'Save note' : 'Submit pick';
+    openPickModal();
+  }
+
+  document.getElementById('pick-note-submit').addEventListener('click', async () => {
+    const note   = document.getElementById('pick-note-input').value.trim() || null;
+    const btn    = document.getElementById('pick-note-submit');
+    const status = document.getElementById('pick-note-status');
+    btn.disabled = true;
+
+    if (_pickEditMode) {
+      try {
+        const r = await fetch('/recommendations/note', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note }),
+        });
+        const d = await r.json();
+        if (!r.ok) { status.textContent = d.error || 'Error saving note.'; status.className = 'form-status err'; btn.disabled = false; return; }
+        closePickModal();
+        // Update pick notes section in the DOM
+        const section   = document.querySelector('.ap-pick-notes-section');
+        const uname     = _albumForPick._meUsername;
+        const existing  = section?.querySelector(`.ap-pick-note[data-username="${uname}"]`);
+        if (note) {
+          if (existing) {
+            existing.querySelector('.ap-pick-note-text').textContent = `"${note}"`;
+          } else if (section) {
+            // Inject a new note card (no like button — user can't like their own)
+            const div = document.createElement('div');
+            div.className = 'ap-pick-note';
+            div.dataset.username = uname;
+            div.innerHTML = `<p class="ap-pick-note-text">"${esc(note)}"</p>
+              <div class="ap-pick-note-footer">
+                <p class="ap-pick-note-by">— <a href="/u/${esc(uname)}" class="username-link">${esc(uname)}</a> <button class="ap-edit-note-btn">Edit note</button></p>
+              </div>`;
+            div.querySelector('.ap-edit-note-btn').addEventListener('click', () => openPickNoteModal(_albumForPick, note, true));
+            section.appendChild(div);
+            section.hidden = false;
+          }
+        } else if (existing) {
+          existing.remove();
+          if (section && !section.querySelector('.ap-pick-note')) section.hidden = true;
+        }
+      } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; }
+      btn.disabled = false;
+    } else {
+      try {
+        const r = await fetch('/recommendations', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ..._albumForPick, note }),
+        });
+        const d = await r.json();
+        if (!r.ok) { status.textContent = d.error || 'Error saving pick.'; status.className = 'form-status err'; btn.disabled = false; return; }
+        // Mark button as picked
+        const recBtn = document.getElementById('ap-rec-btn');
+        if (recBtn) { recBtn.textContent = 'Your pick ✓'; recBtn.classList.add('btn-pick--active'); recBtn.disabled = true; }
+        closePickModal();
+      } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; }
+      btn.disabled = false;
+    }
+  });
+
+  // ── Init ───────────────────────────────────────────────
+  (async () => {
+    const me = await initHeader({ active: null });
+    try {
+      const r = await fetch(`/albums/${encodeURIComponent(spotifyId)}`);
+      if (!r.ok) { document.getElementById('page-main').innerHTML = '<p class="cp-empty">Album not found.</p>'; return; }
+      const data = await r.json();
+      renderPage(data, me);
+
+      // Load comments separately (not included in the main album response)
+      fetch(`/albums/${encodeURIComponent(spotifyId)}/comments`)
+        .then(r => r.json())
+        .then(d => {
+          const list = document.getElementById('ap-comments-list');
+          if (list && d.comments?.length) {
+            list.innerHTML = d.comments.map(c => commentHtml(c, me)).join('');
+            wireLikeBtns(list);
+          }
+        })
+        .catch(() => {});
+
+      // Load user's current pick to set recommend button state
+      if (me) {
+        fetch('/recommendations/me')
+          .then(r => r.json())
+          .then(d => {
+            const recBtn = document.getElementById('ap-rec-btn');
+            if (!recBtn) return;
+            const myPick = d.recommendation;
+            if (myPick?.spotifyId === spotifyId) {
+              // Already picked this album — show edit/add note option
+              recBtn.textContent = 'Your pick ✓';
+              recBtn.classList.add('btn-pick--active');
+              recBtn.disabled = false;
+              // Store username on album object so the save handler can update the DOM
+              data.album._meUsername = me.username;
+              recBtn.addEventListener('click', () => openPickNoteModal(data.album, myPick.note ?? null, true));
+              // Wire any existing edit buttons in the pick notes section
+              document.querySelectorAll('.ap-edit-note-btn').forEach(b => {
+                b.addEventListener('click', () => openPickNoteModal(data.album, myPick.note ?? null, true));
+              });
+            } else if (myPick) {
+              // Picked a different album this week — disable
+              recBtn.textContent = 'Recommend';
+              recBtn.disabled = true;
+              recBtn.title = 'You already picked this week';
+            } else {
+              // No pick yet
+              recBtn.addEventListener('click', () => openPickNoteModal(data.album));
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {
+      document.getElementById('page-main').innerHTML = '<p class="cp-empty">Failed to load album.</p>';
+    }
+  })();
+  </script>
+</body>
+</html>

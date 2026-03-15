@@ -3,6 +3,7 @@ const express        = require('express');
 const { getDb }      = require('../db');
 const requireAuth    = require('../middleware/requireAuth');
 const { search: spotifySearch } = require('../lib/spotify');
+const { checkContent }          = require('../middleware/contentFilter');
 
 const router = express.Router();
 
@@ -58,6 +59,9 @@ router.post('/', requireAuth, async (req, res) => {
     ? rawNote.trim().slice(0, 150)
     : null;
 
+  const _chk1 = note && checkContent(note);
+  if (_chk1?.flagged) return res.status(400).json({ error: _chk1.message });
+
   const weekKey = isoWeekKey();
 
   // If this was a Deezer fallback pick, try to resolve it to the real Spotify ID
@@ -102,6 +106,12 @@ router.post('/', requireAuth, async (req, res) => {
     await db.run(
       'INSERT INTO recommendations (user_id, album_id, week_key, note) VALUES (?, ?, ?, ?)',
       req.session.userId, album.id, weekKey, note
+    );
+
+    // Auto-add to crate when a pick is submitted
+    await db.run(
+      'INSERT OR IGNORE INTO crates (user_id, album_id) VALUES (?, ?)',
+      req.session.userId, album.id
     );
 
     res.json({ ok: true, weekKey });
@@ -215,6 +225,9 @@ router.patch('/note', requireAuth, async (req, res) => {
   const note     = (typeof rawNote === 'string' && rawNote.trim())
     ? rawNote.trim().slice(0, 150)
     : null;
+
+  const _chk2 = note && checkContent(note);
+  if (_chk2?.flagged) return res.status(400).json({ error: _chk2.message });
 
   try {
     const db     = await getDb();
