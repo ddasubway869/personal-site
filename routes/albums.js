@@ -134,6 +134,10 @@ router.get('/:spotifyId', async (req, res) => {
         albumData.coverUrl ?? null, albumData.releaseYear ?? null
       );
 
+      // Attach genre from DB (Deezer fetch doesn't include it)
+      const dzGenreRow = await db.get('SELECT genre FROM albums WHERE spotify_id = ?', albumData.spotifyId);
+      albumData.genre = dzGenreRow?.genre ?? null;
+
       const weekKey = isoWeekKey();
       const userId  = req.session?.userId ?? null;
       const [pickRow, albumDesc, artistBio, pickNotes, weekPickersRows, listenRow, userListenRow, userCrateRow, userListenLaterRow] = await Promise.all([
