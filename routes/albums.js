@@ -262,7 +262,7 @@ router.get('/:spotifyId', async (req, res) => {
       // Fetch from Spotify and cache the result
       albumData = await getAlbum(spotifyId);
 
-      db.run(
+      await db.run(
         `INSERT INTO albums
            (spotify_id, title, artist, cover_url, release_year,
             tracks_json, artists_json, detail_cached_at)
