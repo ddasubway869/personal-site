@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
-  <link rel="stylesheet" href="/style.css?v=114"/>
+  <link rel="stylesheet" href="/style.css?v=115"/>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -31,6 +31,29 @@
       </button>
       <h2 class="modal-title" id="pick-note-title">Submit your pick</h2>
       <div class="pick-note-album-preview" id="pick-note-preview"></div>
+      <!-- Genre picker — shown only when album has no genre yet -->
+      <div id="pick-genre-wrap" style="display:none;flex-direction:column;gap:.5rem;margin-bottom:.75rem">
+        <div class="genre-card">
+          <p class="genre-card-label">Primary Genre</p>
+          <div class="genre-pill-group" id="pick-genre-pills">
+            <button type="button" class="genre-pill" data-genre="Hip-Hop">Hip-Hop</button>
+            <button type="button" class="genre-pill" data-genre="R&amp;B / Soul">R&amp;B / Soul</button>
+            <button type="button" class="genre-pill" data-genre="Pop">Pop</button>
+            <button type="button" class="genre-pill" data-genre="Rock">Rock</button>
+            <button type="button" class="genre-pill" data-genre="Electronic">Electronic</button>
+            <button type="button" class="genre-pill" data-genre="Jazz">Jazz</button>
+            <button type="button" class="genre-pill" data-genre="Classical">Classical</button>
+            <button type="button" class="genre-pill" data-genre="Folk &amp; Country">Folk &amp; Country</button>
+            <button type="button" class="genre-pill" data-genre="Metal">Metal</button>
+            <button type="button" class="genre-pill" data-genre="World">World</button>
+          </div>
+        </div>
+        <div class="genre-card" id="pick-subgenre-card" style="display:none">
+          <p class="genre-card-label">Sub-genre <span class="form-label-opt">(optional)</span></p>
+          <div class="genre-pill-group" id="pick-subgenre-pills"></div>
+        </div>
+        <input type="hidden" id="pick-genre-select" value="">
+      </div>
       <label class="form-label" for="pick-note-input">Tell us why <span class="form-label-opt">(optional)</span></label>
       <textarea class="pick-note-textarea" id="pick-note-input"
         placeholder="What makes this album special?" maxlength="150" rows="3"></textarea>
@@ -43,7 +66,7 @@
     </div>
   </div>
 
-  <script src="/js/common.js?v=2"></script>
+  <script src="/js/common.js?v=3"></script>
   <script>
   'use strict';
 
@@ -554,6 +577,39 @@
     document.getElementById('pick-note-chars').textContent = e.target.value.length;
   });
 
+  // Genre pill wiring for pick modal
+  document.getElementById('pick-genre-pills').addEventListener('click', e => {
+    const pill = e.target.closest('.genre-pill');
+    if (!pill) return;
+    document.querySelectorAll('#pick-genre-pills .genre-pill').forEach(p => p.classList.remove('genre-pill--active'));
+    pill.classList.add('genre-pill--active');
+    const core = pill.dataset.genre;
+    document.getElementById('pick-genre-select').value = core;
+    const subs = SUBGENRES[core] || [];
+    const subEl = document.getElementById('pick-subgenre-pills');
+    const card  = document.getElementById('pick-subgenre-card');
+    if (subs.length) {
+      subEl.innerHTML = subs.map(s => `<button type="button" class="genre-pill genre-pill--sub" data-subgenre="${esc(s)}">${esc(s)}</button>`).join('');
+      card.style.display = '';
+    } else {
+      subEl.innerHTML = '';
+      card.style.display = 'none';
+    }
+  });
+  document.getElementById('pick-subgenre-pills').addEventListener('click', e => {
+    const pill = e.target.closest('.genre-pill--sub');
+    if (!pill) return;
+    const core = document.querySelector('#pick-genre-pills .genre-pill--active')?.dataset.genre || '';
+    if (pill.classList.contains('genre-pill--active')) {
+      pill.classList.remove('genre-pill--active');
+      document.getElementById('pick-genre-select').value = core;
+    } else {
+      document.querySelectorAll('#pick-subgenre-pills .genre-pill--sub').forEach(p => p.classList.remove('genre-pill--active'));
+      pill.classList.add('genre-pill--active');
+      document.getElementById('pick-genre-select').value = core ? `${core}, ${pill.dataset.subgenre}` : pill.dataset.subgenre;
+    }
+  });
+
   let _albumForPick = null;
   let _pickEditMode = false;
 
@@ -575,6 +631,16 @@
     document.getElementById('pick-note-title').textContent =
       _pickEditMode ? (hasExisting ? 'Edit your note' : 'Add your note') : 'Submit your pick';
     document.getElementById('pick-note-submit').textContent = _pickEditMode ? 'Save note' : 'Submit pick';
+    // Show genre picker only when submitting a new pick for an untagged album
+    const needsGenre = !_pickEditMode && !album.genre;
+    const genreWrap = document.getElementById('pick-genre-wrap');
+    genreWrap.style.display = needsGenre ? 'flex' : 'none';
+    if (needsGenre) {
+      document.getElementById('pick-genre-select').value = '';
+      document.querySelectorAll('#pick-genre-pills .genre-pill').forEach(p => p.classList.remove('genre-pill--active'));
+      document.getElementById('pick-subgenre-card').style.display = 'none';
+      document.getElementById('pick-subgenre-pills').innerHTML = '';
+    }
     openPickModal();
   }
 
@@ -620,10 +686,17 @@
       } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; }
       btn.disabled = false;
     } else {
+      const genre = document.getElementById('pick-genre-select')?.value || null;
+      if (!_albumForPick.genre && !genre) {
+        status.textContent = 'Please select a genre.';
+        status.className = 'form-status err';
+        btn.disabled = false;
+        return;
+      }
       try {
         const r = await fetch('/recommendations', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ..._albumForPick, note }),
+          body: JSON.stringify({ ..._albumForPick, note, genre: genre || _albumForPick.genre }),
         });
         const d = await r.json();
         if (!r.ok) { status.textContent = d.error || 'Error saving pick.'; status.className = 'form-status err'; btn.disabled = false; return; }
