@@ -29,8 +29,7 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
     `),
     db.all(`
       SELECT u.username, u.email,
-             al.title, al.artist, al.cover_url,
-
+             al.spotify_id AS spotifyId, al.title, al.artist, al.cover_url, al.genre,
              r.week_key, r.note,
              datetime(r.created_at, 'unixepoch') AS picked_at
       FROM   recommendations r
@@ -214,6 +213,16 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
       border-radius: 4px;
       padding: .1rem .4rem;
     }
+    .genre-edit-cell { display: flex; align-items: center; gap: .4rem; min-width: 160px; }
+    .genre-current { font-size: .8rem; color: var(--muted); }
+    .genre-edit-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: .9rem; padding: 0 .2rem; opacity: .6; }
+    .genre-edit-btn:hover { opacity: 1; color: var(--text); }
+    .genre-edit-form { display: flex; align-items: center; gap: .3rem; }
+    .genre-edit-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: .2rem .4rem; font-size: .8rem; width: 180px; outline: none; }
+    .genre-edit-input:focus { border-color: #555; }
+    .genre-save-btn { background: #fff; color: #000; border: none; border-radius: 4px; padding: .2rem .5rem; font-size: .75rem; font-weight: 600; cursor: pointer; }
+    .genre-save-btn:hover { background: #ddd; }
+    .genre-cancel-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: .85rem; }
     .category {
       font-size: .7rem;
       font-weight: 600;
@@ -368,7 +377,7 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
             <th>Album</th>
             <th>Picked by</th>
             <th>Week</th>
-
+            <th>Genre</th>
             <th>Note</th>
             <th>Date</th>
           </tr>
@@ -387,7 +396,17 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
             </td>
             <td>${esc(p.username || p.email)}</td>
             <td><span class="week-tag">${esc(p.week_key)}</span></td>
-
+            <td>
+              <div class="genre-edit-cell" data-id="${esc(p.spotifyId)}">
+                <span class="genre-current">${p.genre ? esc(p.genre) : '<span style="color:#555">—</span>'}</span>
+                <button class="genre-edit-btn" onclick="openGenreEdit(this)" title="Edit genre">✎</button>
+                <div class="genre-edit-form" style="display:none">
+                  <input class="genre-edit-input" type="text" value="${p.genre ? esc(p.genre) : ''}" placeholder="e.g. Electronic, Downtempo">
+                  <button class="genre-save-btn" onclick="saveGenre(this)">Save</button>
+                  <button class="genre-cancel-btn" onclick="cancelGenreEdit(this)">✕</button>
+                </div>
+              </div>
+            </td>
             <td><span class="note">${p.note ? esc(p.note) : '—'}</span></td>
             <td>${p.picked_at}</td>
           </tr>`).join('')}
@@ -562,6 +581,43 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
         }
       });
     });
+
+    function openGenreEdit(btn) {
+      const cell = btn.closest('.genre-edit-cell');
+      cell.querySelector('.genre-current').style.display = 'none';
+      btn.style.display = 'none';
+      cell.querySelector('.genre-edit-form').style.display = 'flex';
+      cell.querySelector('.genre-edit-input').focus();
+    }
+    function cancelGenreEdit(btn) {
+      const cell = btn.closest('.genre-edit-cell');
+      cell.querySelector('.genre-current').style.display = '';
+      cell.querySelector('.genre-edit-btn').style.display = '';
+      cell.querySelector('.genre-edit-form').style.display = 'none';
+    }
+    async function saveGenre(btn) {
+      const cell    = btn.closest('.genre-edit-cell');
+      const id      = cell.dataset.id;
+      const input   = cell.querySelector('.genre-edit-input');
+      const genre   = input.value.trim();
+      btn.disabled  = true;
+      btn.textContent = '…';
+      try {
+        const r = await fetch('/admin/albums/' + encodeURIComponent(id) + '/genre', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ genre }),
+        });
+        if (!r.ok) throw new Error((await r.json()).error || 'Error');
+        cell.querySelector('.genre-current').innerHTML = genre || '<span style="color:#555">—</span>';
+        cancelGenreEdit(btn);
+      } catch (err) {
+        alert('Failed to save genre: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+      }
+    }
   </script>
 </body>
 </html>`;
@@ -603,6 +659,24 @@ router.post('/users/:id/toggle-supporter', requireAdmin, async (req, res) => {
     res.json({ isSupporter: !!newVal });
   } catch (err) {
     console.error('toggle-supporter error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── POST /admin/albums/:spotifyId/genre ───────────────────
+// Admin override — sets genre regardless of existing value.
+router.post('/albums/:spotifyId/genre', requireAdmin, async (req, res) => {
+  try {
+    const db    = await getDb();
+    const genre = typeof req.body.genre === 'string' ? req.body.genre.trim() : null;
+    const result = await db.run(
+      'UPDATE albums SET genre = ? WHERE spotify_id = ?',
+      genre || null, req.params.spotifyId
+    );
+    if (result.changes === 0) return res.status(404).json({ error: 'Album not found.' });
+    res.json({ ok: true, genre: genre || null });
+  } catch (err) {
+    console.error('Admin genre update error:', err.message);
     res.status(500).json({ error: 'Server error.' });
   }
 });
