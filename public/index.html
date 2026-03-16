@@ -666,7 +666,7 @@
         if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
         closeModal('modal-login');
         me = { email: d.email, username: d.username, isAdmin: !!d.isAdmin, isSupporter: !!d.isSupporter };
-        try { sessionStorage.setItem('arvl_u3', JSON.stringify(me)); } catch {}
+        try { sessionStorage.setItem('arvl_u4', JSON.stringify(me)); } catch {}
         initHeader({ active: null });
         document.getElementById('my-pick-section').hidden = false;
         loadMyPick();
@@ -719,6 +719,7 @@
         closeModal('modal-register');
         e.target.reset();
         sessionStorage.removeItem('arvl_u3');
+        sessionStorage.removeItem('arvl_u4');
         me = await initHeader({ active: null });
         // Show welcome moment
         document.getElementById('welcome-name').textContent = username;
@@ -1405,7 +1406,7 @@
 
       // Handle ?supported=1 (Stripe success redirect)
       if (new URLSearchParams(location.search).get('supported') === '1') {
-        sessionStorage.removeItem('arvl_u3'); // force re-fetch so isSupporter updates in header
+        sessionStorage.removeItem('arvl_u3'); sessionStorage.removeItem('arvl_u4'); // force re-fetch so isSupporter updates in header
         showToast('Thank you for supporting ARVL ★');
         history.replaceState(null, '', '/');
       }

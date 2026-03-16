@@ -615,6 +615,7 @@ async function initHeader({ active = null } = {}) {
           const d = await r.json();
           if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; btn.disabled = false; btn.textContent = 'Log in'; return; }
           sessionStorage.removeItem('arvl_u3');
+          sessionStorage.removeItem('arvl_u4');
           location.reload();
         } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; btn.disabled = false; btn.textContent = 'Log in'; }
       });
@@ -634,6 +635,7 @@ async function initHeader({ active = null } = {}) {
           const d = await r.json();
           if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; btn.disabled = false; btn.textContent = 'Join the club'; return; }
           sessionStorage.removeItem('arvl_u3');
+          sessionStorage.removeItem('arvl_u4');
           location.reload();
         } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; btn.disabled = false; btn.textContent = 'Join the club'; }
       });
@@ -652,6 +654,7 @@ async function initHeader({ active = null } = {}) {
 
     document.getElementById('hdr-logout').addEventListener('click', async () => {
       sessionStorage.removeItem('arvl_u3');
+      sessionStorage.removeItem('arvl_u4');
       await fetch('/auth/logout', { method: 'POST' });
       location.href = '/';
     });
