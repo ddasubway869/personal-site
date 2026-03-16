@@ -200,15 +200,26 @@ router.post('/logout', (req, res) => {
 });
 
 // ── GET /auth/me ──────────────────────────────────────────
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ user: null });
+  const db  = await getDb();
+  const row = await db.get('SELECT seen_splash_v2 FROM users WHERE id = ?', req.session.userId);
   res.json({ user: {
-    id:          req.session.userId,
-    email:       req.session.email,
-    username:    req.session.username || req.session.email?.split('@')[0],
-    isAdmin:     !!req.session.isAdmin,
-    isSupporter: !!req.session.isSupporter,
+    id:            req.session.userId,
+    email:         req.session.email,
+    username:      req.session.username || req.session.email?.split('@')[0],
+    isAdmin:       !!req.session.isAdmin,
+    isSupporter:   !!req.session.isSupporter,
+    seenSplash:    !!(row?.seen_splash_v2),
   }});
+});
+
+// ── POST /auth/splash-seen ─────────────────────────────────
+router.post('/splash-seen', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ ok: false });
+  const db = await getDb();
+  await db.run('UPDATE users SET seen_splash_v2 = 1 WHERE id = ?', req.session.userId);
+  res.json({ ok: true });
 });
 
 module.exports = router;

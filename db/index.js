@@ -234,6 +234,8 @@ async function getDb() {
     'ALTER TABLE community_posts ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0',
     // Admin-set status for bug reports / feature requests
     'ALTER TABLE community_posts ADD COLUMN status TEXT',
+    // Track whether user has dismissed the latest splash screen (v2)
+    'ALTER TABLE users ADD COLUMN seen_splash_v2 INTEGER NOT NULL DEFAULT 0',
   ]) {
     try { await _db.run(stmt); } catch { /* column already exists */ }
   }
