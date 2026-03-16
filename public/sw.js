@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE  = 'arvl-v1';
+const CACHE  = 'arvl-v2';
 const SHELL  = [
   '/',
   '/style.css',

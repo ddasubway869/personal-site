@@ -277,6 +277,32 @@ body {
 .theme-toggle:hover { color: var(--text); }
 
 /* ── Header nav links (Community, Notifications) ────────── */
+/* ── Header search button ────────────────────────────────── */
+.hdr-search-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); border-radius: 50%;
+  transition: color .15s;
+  flex-shrink: 0;
+}
+.hdr-search-btn:hover { color: var(--text); }
+
+/* ── Search panel text input (used in hdr search panel) ─── */
+.sp-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: .9375rem;
+  font-family: inherit;
+  padding: .25rem .4rem;
+  outline: none;
+}
+.sp-search-input::placeholder { color: var(--muted); }
+.sp-search-input:focus { border-bottom-color: var(--subtle); }
+
 .header-nav { display: flex; align-items: center; gap: 1.25rem; }
 .nav-link {
   font-size: .8125rem; color: var(--muted); text-decoration: none;

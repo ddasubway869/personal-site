@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
   <script>if(sessionStorage.getItem('arvl_intro_done'))document.documentElement.classList.add('skip-intro');</script>
-  <link rel="stylesheet" href="style.css?v=116" />
+  <link rel="stylesheet" href="style.css?v=121" />
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -252,7 +252,7 @@
     </div>
   </aside>
 
-  <script src="/js/common.js?v=4"></script>
+  <script src="/js/common.js?v=5"></script>
   <script>
     // ── Utilities ──────────────────────────────────────────
     function isoWeekKey(d = new Date()) {
@@ -1390,6 +1390,18 @@
       loadLeaderboard();
       loadRecentPicks();
       loadCarousel();
+
+      // Handle ?q= from header search on other pages
+      const _qParam = new URLSearchParams(location.search).get('q');
+      if (_qParam) {
+        const inp = document.getElementById('search-input');
+        if (inp) {
+          inp.value = _qParam;
+          doSearch(_qParam);
+          history.replaceState(null, '', '/');
+          inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
 
       // Handle ?supported=1 (Stripe success redirect)
       if (new URLSearchParams(location.search).get('supported') === '1') {
