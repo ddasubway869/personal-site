@@ -109,6 +109,55 @@ async function fetchDeezerAlbum(deezerId) {
   }
 }
 
+// ── GET /albums/also-by?artist=NAME&exclude=TITLE ────────────────────────
+// Must be defined before /:spotifyId to avoid being swallowed by that route.
+// Returns other albums by the same artist via Deezer (no auth required).
+router.get('/also-by', async (req, res) => {
+  const artist  = (req.query.artist  || '').trim();
+  const exclude = (req.query.exclude || '').trim();
+  if (!artist) return res.json({ albums: [] });
+
+  const ac  = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 6000);
+  try {
+    const r = await fetch(
+      `https://api.deezer.com/search/album?q=artist:"${encodeURIComponent(artist)}"&limit=20`,
+      { signal: ac.signal }
+    );
+    clearTimeout(tid);
+    if (!r.ok) return res.json({ albums: [] });
+    const data = await r.json();
+
+    const artistLower = artist.toLowerCase();
+    const seen   = new Set();
+    const albums = (data.data || [])
+      .filter(a => {
+        if (a.record_type === 'single') return false;
+        const key         = (a.title || '').toLowerCase().trim();
+        const albumArtist = (a.artist?.name || '').toLowerCase();
+        // Only include albums where the artist name closely matches
+        if (!albumArtist.includes(artistLower) && !artistLower.includes(albumArtist)) return false;
+        if (exclude && key === exclude.toLowerCase().trim()) return false;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 8)
+      .map(a => ({
+        spotifyId:   `dz_${a.id}`,
+        title:       a.title,
+        artist:      a.artist?.name ?? artist,
+        coverUrl:    a.cover_medium ?? a.cover ?? null,
+        releaseYear: a.release_date ? String(a.release_date).slice(0, 4) : null,
+      }));
+
+    res.json({ albums });
+  } catch {
+    clearTimeout(tid);
+    res.json({ albums: [] });
+  }
+});
+
 // ── GET /albums/:spotifyId ────────────────────────────────
 // Returns album metadata + tracks. Serves from DB cache when available so the
 // panel still works even when Spotify is rate-limited.

@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
-  <link rel="stylesheet" href="/style.css?v=115"/>
+  <link rel="stylesheet" href="/style.css?v=118"/>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -263,6 +263,7 @@
         <nav class="ap-tabs" id="ap-tabs">
           <button class="ap-tab-btn ap-tab-btn--active" data-tab="tracks">Tracklist</button>
           ${description ? `<button class="ap-tab-btn" data-tab="about">About</button>` : ''}
+          <button class="ap-tab-btn" data-tab="also-by">More by ${esc(album.artist.split(',')[0].trim())}</button>
         </nav>
 
         <div class="ap-tab-panel" id="ap-tab-tracks">
@@ -276,16 +277,82 @@
             <p class="ap-description">${esc(description)}</p>
           </div>
         </div>` : ''}
+
+        <div class="ap-tab-panel ap-also-by" id="ap-tab-also-by" hidden>
+          <div id="ap-also-by-list" class="ap-also-by-list">
+            <p class="cp-empty ap-also-by-loading">Loading…</p>
+          </div>
+        </div>
       </div>`;
     main.classList.add('page-loaded', 'page-container--album');
 
     // Tab switching
+    let _alsoByLoaded = false;
     document.querySelectorAll('.ap-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.ap-tab-btn').forEach(b => b.classList.toggle('ap-tab-btn--active', b === btn));
         document.querySelectorAll('.ap-tab-panel').forEach(p => { p.hidden = p.id !== `ap-tab-${btn.dataset.tab}`; });
+        if (btn.dataset.tab === 'also-by' && !_alsoByLoaded) {
+          _alsoByLoaded = true;
+          loadAlsoBy(album.artist, album.title);
+        }
       });
     });
+
+    // Also by Artist
+    const plusSvg  = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></svg>`;
+    const clockSvg = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,15"/></svg>`;
+    const checkSvg = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,13 9,18 20,7"/></svg>`;
+
+    async function loadAlsoBy(artist, currentTitle) {
+      const list = document.getElementById('ap-also-by-list');
+      try {
+        const r = await fetch(`/albums/also-by?artist=${encodeURIComponent(artist)}&exclude=${encodeURIComponent(currentTitle)}`);
+        const d = await r.json();
+        if (!d.albums || d.albums.length === 0) {
+          list.innerHTML = '<p class="cp-empty">No other albums found.</p>';
+          return;
+        }
+        list.innerHTML = d.albums.map(a => `
+          <div class="ap-also-by-row">
+            <a href="/album/${encodeURIComponent(a.spotifyId)}" class="ap-also-by-link">
+              ${a.coverUrl ? `<div class="ap-also-by-cover" style="background-image:url('${a.coverUrl}')"></div>` : '<div class="ap-also-by-cover ap-also-by-cover--empty"></div>'}
+              <div class="ap-also-by-info">
+                <span class="ap-also-by-title">${a.title}</span>
+                ${a.releaseYear ? `<span class="ap-also-by-year">${a.releaseYear}</span>` : ''}
+              </div>
+            </a>
+            ${me ? `<div class="ap-also-by-actions">
+              <button class="btn-add ap-also-by-btn" data-id="${a.spotifyId}" title="Add to collection">${plusSvg}</button>
+              <button class="btn-ll ap-also-by-btn" data-id="${a.spotifyId}" title="Listen later">${clockSvg}</button>
+            </div>` : ''}
+          </div>`).join('');
+
+        if (me) {
+          list.querySelectorAll('.btn-add[data-id]').forEach(btn => {
+            btn.addEventListener('click', async e => {
+              e.preventDefault();
+              const id = btn.dataset.id;
+              const res = await fetch(`/crate/${encodeURIComponent(id)}`, { method: 'POST' });
+              const data = await res.json();
+              btn.classList.toggle('btn-add--active', data.inCrate);
+              btn.innerHTML = data.inCrate ? checkSvg : plusSvg;
+            });
+          });
+          list.querySelectorAll('.btn-ll[data-id]').forEach(btn => {
+            btn.addEventListener('click', async e => {
+              e.preventDefault();
+              const id = btn.dataset.id;
+              const res = await fetch(`/listen-later/${encodeURIComponent(id)}`, { method: 'POST' });
+              const data = await res.json();
+              btn.classList.toggle('btn-ll--active', data.inListenLater);
+            });
+          });
+        }
+      } catch {
+        list.innerHTML = '<p class="cp-empty">Couldn\'t load albums.</p>';
+      }
+    }
 
     // Pickers popover
     let _pickersPop = null;
