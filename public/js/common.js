@@ -90,7 +90,6 @@ async function initHeader({ active = null } = {}) {
           </button>` : ''}
         ${user ? `<nav class="header-nav">
           <a href="/community" class="nav-link${cls('community')}">Community</a>
-          <a href="/archive" class="nav-link${cls('archive')}">Archive</a>
           ${user.isAdmin ? `<a href="/admin/dashboard" class="nav-link${cls('admin')}">Admin</a>` : ''}
         </nav>` : ''}
         ${user ? `
