@@ -326,7 +326,14 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
     <section>
       <h2>Members</h2>
       ${users.length === 0 ? '<p class="empty">No members yet.</p>' : `
-      <table>
+      <input
+        id="member-search"
+        type="search"
+        placeholder="Search by username or email…"
+        style="width:100%;max-width:320px;padding:.45rem .75rem;margin-bottom:1rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:.8125rem;outline:none;box-sizing:border-box;"
+        oninput="filterMembers(this.value)"
+      />
+      <table id="members-table">
         <thead>
           <tr>
             <th>Username</th>
@@ -339,8 +346,8 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
         </thead>
         <tbody>
           ${users.map(u => `
-          <tr id="user-row-${u.id}">
-            <td>${esc(u.username || '—')}</td>
+          <tr id="user-row-${u.id}" data-search="${esc((u.username || '') + ' ' + u.email).toLowerCase()}">
+            <td>${u.username ? `<a href="/u/${esc(u.username)}" style="font-weight:600;text-decoration:none;color:var(--text);" target="_blank">${esc(u.username)}</a>` : '—'}</td>
             <td>${esc(u.email)}</td>
             <td><span class="badge ${u.verified ? 'badge--verified' : 'badge--pending'}">${u.verified ? 'Verified' : 'Pending'}</span></td>
             <td>
@@ -524,6 +531,13 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
       const isLight = html.classList.toggle('light');
       btn.textContent = isLight ? 'Dark mode' : 'Light mode';
       localStorage.setItem('admin-theme', isLight ? 'light' : 'dark');
+    }
+
+    function filterMembers(q) {
+      const term = q.toLowerCase().trim();
+      document.querySelectorAll('#members-table tbody tr').forEach(row => {
+        row.style.display = !term || row.dataset.search.includes(term) ? '' : 'none';
+      });
     }
 
     function showTab(name) {
