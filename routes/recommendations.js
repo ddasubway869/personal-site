@@ -46,7 +46,8 @@ function isoWeekKey(date = new Date()) {
 
 const VALID_GENRES = new Set([
   'Hip-Hop', 'R&B / Soul', 'Pop', 'Rock', 'Electronic',
-  'Jazz', 'Classical', 'Folk / Country', 'Metal', 'World',
+  'Jazz', 'Classical', 'Folk & Country', 'Metal', 'World',
+  'Ambient', 'Blues',
 ]);
 
 // ── POST /recommend ───────────────────────────────────────
@@ -67,8 +68,9 @@ router.post('/', requireAuth, async (req, res) => {
   const _chk1 = note && checkContent(note);
   if (_chk1?.flagged) return res.status(400).json({ error: _chk1.message });
 
-  // genre is optional but must be from allowed list
-  const genre = (typeof rawGenre === 'string' && VALID_GENRES.has(rawGenre)) ? rawGenre : null;
+  // genre is optional but core part must be from allowed list (format: "Core" or "Core, Sub")
+  const coreGenre = typeof rawGenre === 'string' ? rawGenre.split(',')[0].trim() : null;
+  const genre = (coreGenre && VALID_GENRES.has(coreGenre)) ? rawGenre.trim() : null;
 
   const weekKey = isoWeekKey();
 
