@@ -1208,10 +1208,12 @@ html.light .ap-genre-picker { border-color: #b8b8b0; }
 }
 
 .genre-filters {
-  display: flex;
   flex-wrap: wrap;
   gap: .4rem;
   padding: 0 1.25rem .75rem;
+}
+.genre-filters:not([hidden]) {
+  display: flex;
 }
 
 .genre-subfilters {
