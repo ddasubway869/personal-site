@@ -63,7 +63,9 @@ async function initHeader({ active = null } = {}) {
       const r = await fetch('/auth/me');
       if (r.ok) { const d = await r.json(); user = d.user || null; }
     } catch {}
-    try { sessionStorage.setItem(_U_KEY, JSON.stringify(user)); } catch {}
+    // Only cache when logged in — never cache null, so a login on the same
+    // page doesn't get blocked by a stale anonymous-visit null entry
+    if (user) { try { sessionStorage.setItem(_U_KEY, JSON.stringify(user)); } catch {} }
   }
 
   const uname = user ? (user.username || user.email.split('@')[0]) : null;
