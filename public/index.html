@@ -666,7 +666,6 @@
         if (!r.ok) { status.textContent = d.error; status.className = 'form-status err'; return; }
         closeModal('modal-login');
         me = { email: d.email, username: d.username, isAdmin: !!d.isAdmin, isSupporter: !!d.isSupporter };
-        try { sessionStorage.setItem('arvl_u4', JSON.stringify(me)); } catch {}
         initHeader({ active: null });
         document.getElementById('my-pick-section').hidden = false;
         loadMyPick();
