@@ -1465,7 +1465,7 @@
       const hasGenre = _allRecentPicks.some(p => p.genre);
       const filtersEl    = document.getElementById('genre-filters');
       const subfiltersEl = document.getElementById('genre-subfilters');
-      if (!hasGenre) { filtersEl.hidden = true; subfiltersEl.style.display = 'none'; return; }
+      if (!hasGenre || !me) { filtersEl.hidden = true; subfiltersEl.style.display = 'none'; return; }
       filtersEl.hidden = false;
 
       // Hide genre buttons that have no picks
