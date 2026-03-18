@@ -836,4 +836,46 @@ router.get('/test-email', requireSecret, async (req, res) => {
   res.json({ ok: true, sent: type, to: 'all eligible members' });
 });
 
+// ── GET /admin/send-apology ───────────────────────────────
+// One-time apology blast. Protected by secret param.
+router.get('/send-apology', requireSecret, async (req, res) => {
+  const db       = await getDb();
+  const mailer   = require('../lib/mailer');
+  const { buildEmail } = require('../lib/scheduler');
+  const BASE_URL = process.env.BASE_URL || 'https://arvl.app';
+
+  const users = await db.all(
+    `SELECT email, username, unsubscribe_token FROM users WHERE verified = 1 AND email_opt_out = 0`
+  );
+
+  res.json({ ok: true, sending: users.length });
+
+  for (const u of users) {
+    const name = u.username || u.email.split('@')[0];
+    const unsubscribeUrl = u.unsubscribe_token
+      ? `${BASE_URL}/auth/unsubscribe?token=${u.unsubscribe_token}`
+      : null;
+    try {
+      await mailer.sendMail({
+        from: `"ARVL" <${process.env.MAIL_FROM}>`,
+        to:   u.email,
+        subject: 'We owe you an apology',
+        text: `Hey ${name},\n\nThis morning a bug caused some of you to receive the same reminder email two or three times. That was entirely our fault, a server issue, not spam. We've fixed it.\n\nSorry for the noise.\n\nARVL\n\n${unsubscribeUrl ? `Unsubscribe: ${unsubscribeUrl}` : ''}`,
+        html: buildEmail({
+          eyebrow: 'From the ARVL team',
+          heading: 'That was us. Sorry.',
+          body: `This morning, a bug caused some of you to receive the same "you haven't picked yet" reminder two or three times in a row.<br><br>That was entirely our fault. A server configuration issue, not spam. We've fixed the underlying bug and it won't happen again.<br><br>Sorry for the noise. Thanks for being here.`,
+          ctaLabel: 'Go to ARVL',
+          unsubscribeUrl,
+        }),
+      });
+    } catch (err) {
+      console.error('Apology send failed for', u.email, err.message);
+    }
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  console.log(`Apology email sent to ${users.length} users.`);
+});
+
 module.exports = router;
