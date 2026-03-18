@@ -236,8 +236,18 @@ async function getDb() {
     'ALTER TABLE community_posts ADD COLUMN status TEXT',
     // Track whether user has dismissed the latest splash screen (v2)
     'ALTER TABLE users ADD COLUMN seen_splash_v2 INTEGER NOT NULL DEFAULT 0',
+    // Email unsubscribe support
+    'ALTER TABLE users ADD COLUMN email_opt_out INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE users ADD COLUMN unsubscribe_token TEXT',
   ]) {
     try { await _db.run(stmt); } catch { /* column already exists */ }
+  }
+
+  // Backfill unsubscribe tokens for any users that don't have one yet
+  const { randomBytes } = require('crypto');
+  const unsubbed = await _db.all('SELECT id FROM users WHERE unsubscribe_token IS NULL');
+  for (const u of unsubbed) {
+    await _db.run('UPDATE users SET unsubscribe_token = ? WHERE id = ?', randomBytes(24).toString('hex'), u.id);
   }
 
   return _db;
