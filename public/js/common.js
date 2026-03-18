@@ -264,7 +264,7 @@ async function initHeader({ active = null } = {}) {
       document.removeEventListener('click', _hdrCloseStreamPop);
       _hdrCloseStreamPop();
       const q     = encodeURIComponent(album.title + ' ' + album.artist);
-      const sHref = album._deezer
+      const sHref = (album._deezer || String(album.spotifyId).startsWith('dz_'))
         ? `https://open.spotify.com/search/${q}`
         : `https://open.spotify.com/album/${album.spotifyId}`;
       const rect = btn.getBoundingClientRect();

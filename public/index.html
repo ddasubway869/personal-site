@@ -1151,7 +1151,7 @@
       document.removeEventListener('click', closeSharedStreamPop); // clear any stale outside-click listener first
       closeSharedStreamPop();
       const q = encodeURIComponent(title + ' ' + artist);
-      const spotifyHref     = isDeezer ? `https://open.spotify.com/search/${q}` : `https://open.spotify.com/album/${spotifyId}`;
+      const spotifyHref     = (isDeezer || String(spotifyId).startsWith('dz_')) ? `https://open.spotify.com/search/${q}` : `https://open.spotify.com/album/${spotifyId}`;
       const appleMusicHref  = appleMusicUrl || `https://music.apple.com/us/search?term=${q}`;
       const tidalHref       = `https://tidal.com/search/albums?q=${q}`;
       const deezerHref      = `https://www.deezer.com/search/${encodeURIComponent((title + ' ' + artist).toLowerCase())}/album`;
