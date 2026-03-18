@@ -30,7 +30,7 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
     db.all(`
       SELECT u.username, u.email,
              al.spotify_id AS spotifyId, al.title, al.artist, al.cover_url, al.genre,
-             r.week_key, r.note,
+             r.id AS rec_id, r.week_key, r.note,
              datetime(r.created_at, 'unixepoch') AS picked_at
       FROM   recommendations r
       JOIN   users  u  ON u.id  = r.user_id
@@ -387,11 +387,12 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
             <th>Genre</th>
             <th>Note</th>
             <th>Date</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
           ${picks.map(p => `
-          <tr>
+          <tr id="pick-row-${p.rec_id}">
             <td>
               <div class="pick-card">
                 ${p.cover_url ? `<img class="pick-cover" src="${esc(p.cover_url)}" alt="">` : '<div class="pick-cover"></div>'}
@@ -416,6 +417,14 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
             </td>
             <td><span class="note">${p.note ? esc(p.note) : '—'}</span></td>
             <td>${p.picked_at}</td>
+            <td>
+              <button
+                class="delete-pick-btn"
+                data-rec-id="${p.rec_id}"
+                data-label="${esc(p.username || p.email)} — ${esc(p.title)}"
+                style="background:none;border:1px solid #3a1a1a;border-radius:6px;padding:.2rem .55rem;font-size:.72rem;cursor:pointer;color:#ef5350;font-family:inherit;transition:all .15s;white-space:nowrap;"
+              >Delete</button>
+            </td>
           </tr>`).join('')}
         </tbody>
       </table>`}
@@ -632,6 +641,25 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
         btn.textContent = 'Save';
       }
     }
+
+    document.querySelectorAll('.delete-pick-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const recId = btn.dataset.recId;
+        const label = btn.dataset.label;
+        if (!confirm('Delete pick: ' + label + '?\\n\\nThis allows the user to submit a new pick this week.')) return;
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+          const r = await fetch('/admin/picks/' + recId, { method: 'DELETE' });
+          if (!r.ok) throw new Error((await r.json()).error || 'Error');
+          document.getElementById('pick-row-' + recId).remove();
+        } catch (err) {
+          alert('Failed to delete pick: ' + err.message);
+          btn.disabled = false;
+          btn.textContent = 'Delete';
+        }
+      });
+    });
   </script>
 </body>
 </html>`;
@@ -691,6 +719,20 @@ router.post('/albums/:spotifyId/genre', requireAdmin, async (req, res) => {
     res.json({ ok: true, genre: genre || null });
   } catch (err) {
     console.error('Admin genre update error:', err.message);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── DELETE /admin/picks/:id ───────────────────────────────
+// Removes a pick so the user can re-submit for that week.
+router.delete('/picks/:id', requireAdmin, async (req, res) => {
+  try {
+    const db     = await getDb();
+    const result = await db.run('DELETE FROM recommendations WHERE id = ?', req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Pick not found.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin delete pick error:', err.message);
     res.status(500).json({ error: 'Server error.' });
   }
 });
