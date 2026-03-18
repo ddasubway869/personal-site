@@ -127,7 +127,27 @@
         <button type="submit" class="btn btn-submit">Log in</button>
         <p class="form-status" id="login-status" aria-live="polite"></p>
       </form>
+      <p class="modal-switch"><button class="link-btn" id="sw-to-forgot">Forgot password?</button></p>
       <p class="modal-switch">No account? <button class="link-btn" id="sw-to-reg">Sign up</button></p>
+    </div>
+  </div>
+
+  <!-- ── Forgot password modal ─────────────────────────── -->
+  <div class="modal-overlay" id="modal-forgot" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
+      <button class="modal-close" data-close="modal-forgot" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <h2 class="modal-title" id="forgot-title">Reset password</h2>
+      <form id="form-forgot" novalidate>
+        <div class="field">
+          <label for="forgot-email">Email</label>
+          <input id="forgot-email" type="email" placeholder="you@example.com" autocomplete="email" required />
+        </div>
+        <button type="submit" class="btn btn-submit">Send reset link</button>
+        <p class="form-status" id="forgot-status" aria-live="polite"></p>
+      </form>
+      <p class="modal-switch">Back to <button class="link-btn" id="sw-to-login-from-forgot">Log in</button></p>
     </div>
   </div>
 
@@ -397,8 +417,32 @@
       }
     });
 
-    document.getElementById('sw-to-reg').addEventListener('click',    () => { closeModal('modal-login');    openModal('modal-register'); });
-    document.getElementById('sw-to-login').addEventListener('click',  () => { closeModal('modal-register'); openModal('modal-login'); });
+    document.getElementById('sw-to-reg').addEventListener('click',          () => { closeModal('modal-login');   openModal('modal-register'); });
+    document.getElementById('sw-to-login').addEventListener('click',         () => { closeModal('modal-register'); openModal('modal-login'); });
+    document.getElementById('sw-to-forgot').addEventListener('click',        () => { closeModal('modal-login');   openModal('modal-forgot'); });
+    document.getElementById('sw-to-login-from-forgot').addEventListener('click', () => { closeModal('modal-forgot');  openModal('modal-login'); });
+
+    document.getElementById('form-forgot').addEventListener('submit', async e => {
+      e.preventDefault();
+      const status = document.getElementById('forgot-status');
+      const btn    = e.target.querySelector('[type=submit]');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      status.textContent = ''; status.className = 'form-status';
+      try {
+        await fetch('/auth/forgot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: document.getElementById('forgot-email').value.trim() }),
+        });
+        status.textContent = 'If that email is registered, a reset link is on its way.';
+        status.className = 'form-status';
+        btn.textContent = 'Sent';
+      } catch {
+        status.textContent = 'Something went wrong. Please try again.';
+        status.className = 'form-status err';
+        btn.disabled = false; btn.textContent = 'Send reset link';
+      }
+    });
 
     // ── Splash ─────────────────────────────────────────────
     function maybeShowSplash(user) {

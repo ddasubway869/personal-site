@@ -239,6 +239,13 @@ async function getDb() {
     // Email unsubscribe support
     'ALTER TABLE users ADD COLUMN email_opt_out INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE users ADD COLUMN unsubscribe_token TEXT',
+    `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token      TEXT    NOT NULL UNIQUE,
+      expires_at INTEGER NOT NULL,
+      used       INTEGER NOT NULL DEFAULT 0
+    )`,
   ]) {
     try { await _db.run(stmt); } catch { /* column already exists */ }
   }

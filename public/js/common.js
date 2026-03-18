@@ -570,7 +570,20 @@ async function initHeader({ active = null } = {}) {
               <button type="submit" class="btn btn-submit">Log in</button>
               <p class="form-status" id="login-status" aria-live="polite"></p>
             </form>
+            <p class="modal-switch"><button class="link-btn" id="sw-to-forgot">Forgot password?</button></p>
             <p class="modal-switch">No account? <button class="link-btn" id="sw-to-reg">Sign up</button></p>
+          </div>
+        </div>
+        <div class="modal-overlay" id="modal-forgot" hidden>
+          <div class="modal" role="dialog" aria-modal="true">
+            <button class="modal-close" data-auth-close aria-label="Close">${closeSvg}</button>
+            <h2 class="modal-title">Reset password</h2>
+            <form id="form-forgot" novalidate>
+              <div class="field"><label for="forgot-email">Email</label><input id="forgot-email" type="email" placeholder="you@example.com" autocomplete="email" required /></div>
+              <button type="submit" class="btn btn-submit">Send reset link</button>
+              <p class="form-status" id="forgot-status" aria-live="polite"></p>
+            </form>
+            <p class="modal-switch">Back to <button class="link-btn" id="sw-to-login-from-forgot">Log in</button></p>
           </div>
         </div>
         <div class="modal-overlay" id="modal-register" hidden>
@@ -595,8 +608,29 @@ async function initHeader({ active = null } = {}) {
       wrap.querySelectorAll('[data-auth-close]').forEach(b => b.addEventListener('click', _close));
       wrap.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) _close(); }));
       document.addEventListener('keydown', e => { if (e.key === 'Escape') _close(); });
-      document.getElementById('sw-to-reg').addEventListener('click',   () => { _close(); _open('modal-register'); });
-      document.getElementById('sw-to-login').addEventListener('click', () => { _close(); _open('modal-login'); });
+      document.getElementById('sw-to-reg').addEventListener('click',              () => { _close(); _open('modal-register'); });
+      document.getElementById('sw-to-login').addEventListener('click',            () => { _close(); _open('modal-login'); });
+      document.getElementById('sw-to-forgot').addEventListener('click',           () => { _close(); _open('modal-forgot'); });
+      document.getElementById('sw-to-login-from-forgot').addEventListener('click',() => { _close(); _open('modal-login'); });
+
+      document.getElementById('form-forgot').addEventListener('submit', async e => {
+        e.preventDefault();
+        const status = document.getElementById('forgot-status');
+        const btn    = e.target.querySelector('[type=submit]');
+        btn.disabled = true; btn.textContent = 'Sending…';
+        status.textContent = ''; status.className = 'form-status';
+        try {
+          await fetch('/auth/forgot', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: document.getElementById('forgot-email').value.trim() }),
+          });
+          status.textContent = 'If that email is registered, a reset link is on its way.';
+          btn.textContent = 'Sent';
+        } catch {
+          status.textContent = 'Something went wrong.'; status.className = 'form-status err';
+          btn.disabled = false; btn.textContent = 'Send reset link';
+        }
+      });
 
       window.addEventListener('hdr:login', () => _open('modal-login'));
       window.addEventListener('hdr:join',  () => _open('modal-register'));
