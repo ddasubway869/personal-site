@@ -22,7 +22,7 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
 
   const [users, picks, feedback, emailLogs, communityPosts] = await Promise.all([
     db.all(`
-      SELECT id, username, email, verified, is_admin, is_supporter,
+      SELECT id, username, email, verified, is_admin, is_supporter, email_opt_out,
              datetime(created_at, 'unixepoch') AS joined
       FROM   users
       ORDER  BY created_at DESC
@@ -341,6 +341,7 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
             <th>Status</th>
             <th>Role</th>
             <th>Supporter</th>
+            <th>Emails</th>
             <th>Joined</th>
           </tr>
         </thead>
@@ -365,6 +366,14 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
                 data-is-supporter="${u.is_supporter ? '1' : '0'}"
                 style="background:none;border:1px solid var(--border);border-radius:6px;padding:.2rem .6rem;font-size:.75rem;cursor:pointer;color:${u.is_supporter ? '#c9a84c' : 'var(--muted)'};font-family:inherit;transition:all .15s;"
               >${u.is_supporter ? '★ Yes' : '—'}</button>
+            </td>
+            <td>
+              <button
+                class="email-toggle-btn"
+                data-user-id="${u.id}"
+                data-opted-out="${u.email_opt_out ? '1' : '0'}"
+                style="background:none;border:1px solid var(--border);border-radius:6px;padding:.2rem .6rem;font-size:.75rem;cursor:pointer;color:${u.email_opt_out ? '#ef5350' : 'var(--muted)'};font-family:inherit;transition:all .15s;"
+              >${u.email_opt_out ? 'Opted out' : 'Subscribed'}</button>
             </td>
             <td>${u.joined}</td>
           </tr>`).join('')}
@@ -642,6 +651,25 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
       }
     }
 
+    document.querySelectorAll('.email-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.dataset.userId;
+        btn.disabled = true;
+        try {
+          const r = await fetch('/admin/users/' + userId + '/toggle-email', { method: 'POST' });
+          if (!r.ok) throw new Error();
+          const d = await r.json();
+          btn.dataset.optedOut = d.emailOptOut ? '1' : '0';
+          btn.textContent      = d.emailOptOut ? 'Opted out' : 'Subscribed';
+          btn.style.color      = d.emailOptOut ? '#ef5350' : 'var(--muted)';
+        } catch {
+          alert('Failed to update email preference.');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
     document.querySelectorAll('.delete-pick-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const recId = btn.dataset.recId;
@@ -719,6 +747,21 @@ router.post('/albums/:spotifyId/genre', requireAdmin, async (req, res) => {
     res.json({ ok: true, genre: genre || null });
   } catch (err) {
     console.error('Admin genre update error:', err.message);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── POST /admin/users/:id/toggle-email ───────────────────
+router.post('/users/:id/toggle-email', requireAdmin, async (req, res) => {
+  try {
+    const db   = await getDb();
+    const user = await db.get('SELECT id, email_opt_out FROM users WHERE id = ?', req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    const newVal = user.email_opt_out ? 0 : 1;
+    await db.run('UPDATE users SET email_opt_out = ? WHERE id = ?', newVal, user.id);
+    res.json({ emailOptOut: !!newVal });
+  } catch (err) {
+    console.error('toggle-email error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });

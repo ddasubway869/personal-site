@@ -41,8 +41,9 @@ router.post('/register', async (req, res) => {
     const token  = crypto.randomBytes(32).toString('hex');
     const expiry = Math.floor(Date.now() / 1000) + TOKEN_TTL;
 
+    const unsubToken = crypto.randomBytes(24).toString('hex');
     const { lastID: userId } = await db.run(
-      'INSERT INTO users (email, password_hash, username) VALUES (?, ?, ?)', email, hash, username
+      'INSERT INTO users (email, password_hash, username, unsubscribe_token) VALUES (?, ?, ?, ?)', email, hash, username, unsubToken
     );
     await db.run(
       'INSERT INTO verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
@@ -220,6 +221,21 @@ router.post('/splash-seen', async (req, res) => {
   const db = await getDb();
   await db.run('UPDATE users SET seen_splash_v2 = 1 WHERE id = ?', req.session.userId);
   res.json({ ok: true });
+});
+
+// ── GET /auth/unsubscribe?token=... ────────────────────────
+router.get('/unsubscribe', async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).send('Missing token.');
+  const db  = await getDb();
+  const user = await db.get('SELECT id, email, email_opt_out FROM users WHERE unsubscribe_token = ?', token);
+  if (!user) return res.status(404).send('Invalid or expired unsubscribe link.');
+  if (!user.email_opt_out) {
+    await db.run('UPDATE users SET email_opt_out = 1 WHERE id = ?', user.id);
+  }
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unsubscribed — ARVL</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0d0d0d;color:#f5f4f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center}.card{max-width:380px}.brand{font-size:1.1rem;font-weight:700;letter-spacing:-.03em;margin-bottom:2rem;display:block;text-decoration:none;color:inherit}h1{font-size:1.4rem;font-weight:700;margin-bottom:.75rem}p{color:#888;font-size:.9rem;line-height:1.6}a{color:#f5f4f0;margin-top:1.5rem;display:inline-block;font-size:.85rem}</style>
+</head><body><div class="card"><a href="/" class="brand">ARVL</a><h1>You're unsubscribed.</h1><p>We've removed ${user.email} from our weekly emails. Your account is still active — you can log in any time.</p><a href="/">Back to ARVL</a></div></body></html>`);
 });
 
 module.exports = router;
