@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Archive — ARVL</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="ARVL"/>
+  <link rel="stylesheet" href="/style.css?v=125" />
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  </script>
+</head>
+<body>
+
+  <header id="site-header"></header>
+
+  <main class="cp-main">
+    <div class="cp-container">
+      <h1 class="cp-heading">Archive</h1>
+      <p class="arc-subheading">Every album ever recommended on ARVL.</p>
+
+      <!-- Search -->
+      <input type="search" id="arc-search" class="arc-search-input" placeholder="Search albums or artists…" autocomplete="off" />
+
+      <!-- Week filter -->
+      <select id="arc-week-select" class="arc-week-select">
+        <option value="">All weeks</option>
+      </select>
+
+      <!-- Genre filters -->
+      <div class="genre-filters" id="arc-genre-filters" hidden>
+        <button class="genre-filter-btn genre-filter-btn--active" data-genre="">All</button>
+        <button class="genre-filter-btn" data-genre="Hip-Hop">Hip-Hop</button>
+        <button class="genre-filter-btn" data-genre="R&B / Soul">R&amp;B / Soul</button>
+        <button class="genre-filter-btn" data-genre="Pop">Pop</button>
+        <button class="genre-filter-btn" data-genre="Rock">Rock</button>
+        <button class="genre-filter-btn" data-genre="Electronic">Electronic</button>
+        <button class="genre-filter-btn" data-genre="Jazz">Jazz</button>
+        <button class="genre-filter-btn" data-genre="Classical">Classical</button>
+        <button class="genre-filter-btn" data-genre="Folk &amp; Country">Folk &amp; Country</button>
+        <button class="genre-filter-btn" data-genre="Metal">Metal</button>
+        <button class="genre-filter-btn" data-genre="World">World</button>
+        <button class="genre-filter-btn" data-genre="Alternative Rock">Alternative Rock</button>
+      </div>
+      <div class="genre-subfilters" id="arc-genre-subfilters" style="display:none;margin-bottom:.75rem"></div>
+
+      <!-- Grid -->
+      <div class="arc-grid" id="arc-grid"></div>
+      <p class="empty-state" id="arc-empty" hidden>No albums found.</p>
+    </div>
+  </main>
+
+  <script src="/js/common.js?v=3"></script>
+  <script>
+    'use strict';
+
+    const SUBGENRES = {
+      'Hip-Hop':        ['Trap','Boom Bap','G-Funk','Drill','Conscious Rap','Mumble Rap','Lo-Fi Hip-Hop','Jazz Rap','Southern Rap','Crunk','Bounce','Emo Rap','Alternative','Experimental','Chillhop'],
+      'R&B / Soul':     ['Contemporary R&B','Neo-Soul','New Jack Swing','Hip-Hop Soul','Trap-Soul','Alternative R&B','Doo-Wop'],
+      'Pop':            ['Pop Rock','Electropop','Synth-Pop','Teen Pop','Dance-Pop','Disco-Pop','Indie Pop','Pop-R&B','Bedroom Pop','Traditional Pop','Psychedelic Pop'],
+      'Rock':           ['Classic Rock','Hard Rock','Punk Rock','Grunge','Post-Grunge','Alternative Rock','Indie Rock','Pop-Punk','Progressive Rock','Glam Rock','Electronic Rock','Post-Punk','New Wave','Shoegaze','Dream Pop','Math Rock'],
+      'Electronic':     ['House','Techno','Dubstep','Drum n Bass','Trance','Hardstyle','Trip-Hop','Downtempo','Experimental','Electro & Fusion'],
+      'Jazz':           ['Dixieland','Swing','Bebop','Cool Jazz','Hard Bop','Modal Jazz','Fusion','Smooth Jazz','Latin Jazz','Free Jazz','Neo-Bop','Spiritual Jazz'],
+      'Metal':          ['Thrash Metal','Death Metal','Black Metal','Progressive Metal','Metalcore','Groove Metal','Symphonic Metal','Nu Metal','Blackened Deathcore','Djent'],
+      'Classical':      ['Baroque','Classical','Romantic','Modernism & Avant-Garde','Minimalism','Contemporary Classical'],
+      'Folk & Country': ['Folk Rock','Indie Folk','Celtic Folk','Bluegrass','Anti-Folk','Folk Metal','Americana','Outlaw Country','Country Pop','Bro-Country','Red Dirt','Nashville Sound','Honky-Tonk'],
+      'World':          ['Afrobeats','Reggaeton','Salsa','Bachata','Regional Mexican','Bongo Flava','Worldbeat','K-Pop','Brazil','Africa','Asia'],
+      'Ambient':        ['Dark Ambient','Drone','Nature Sounds','Space Ambient','Neo-Classical Ambient','Ambient Electronic'],
+      'Blues':          ['Delta Blues','Chicago Blues','Texas Blues','Piedmont Blues','Jump Blues','Swamp Blues','Soul Blues','British Blues'],
+      'Alternative Rock': ['Art Rock','Post-Rock','Emo','Indie Rock','Grunge','Shoegaze','Dream Pop'],
+    };
+
+    let _allPicks = [];
+    let _activeGenre    = '';
+    let _activeSubgenre = '';
+    let _activeWeek     = '';
+    let _searchQ        = '';
+    let _me             = null;
+    let _crateIds       = new Set();
+    let _llIds          = new Set();
+
+    function fmtWeek(wk) {
+      // "2026-W11" → "Week 11, 2026"
+      const m = wk.match(/^(\d{4})-W(\d+)$/);
+      return m ? `Week ${parseInt(m[2], 10)}, ${m[1]}` : wk;
+    }
+
+    function applyFilters() {
+      let picks = _allPicks;
+      if (_searchQ) {
+        const q = _searchQ.toLowerCase();
+        picks = picks.filter(p =>
+          p.title.toLowerCase().includes(q) || p.artist.toLowerCase().includes(q)
+        );
+      }
+      if (_activeWeek) {
+        picks = picks.filter(p => p.weeks && p.weeks.split(',').includes(_activeWeek));
+      }
+      if (_activeSubgenre) {
+        picks = picks.filter(p => p.genre && p.genre.includes(_activeSubgenre));
+      } else if (_activeGenre) {
+        picks = picks.filter(p => p.genre && (p.genre === _activeGenre || p.genre.startsWith(_activeGenre + ',')));
+      }
+      renderGrid(picks);
+    }
+
+    function renderGrid(picks) {
+      const grid  = document.getElementById('arc-grid');
+      const empty = document.getElementById('arc-empty');
+      grid.innerHTML = '';
+      if (!picks.length) { empty.hidden = false; return; }
+      empty.hidden = true;
+      picks.forEach(p => grid.appendChild(makeCard(p)));
+    }
+
+    function makeCard(p) {
+      const card = document.createElement('div');
+      card.className = 'rp-card';
+      const bg = p.coverUrl ? `style="background-image:url('${esc(p.coverUrl)}')"` : '';
+      const genreLabel = p.genre
+        ? (p.genre.includes(', ') ? p.genre.split(', ')[1] : p.genre)
+        : null;
+      card.innerHTML = `
+        <div class="rp-card-btn" role="button" tabindex="0" aria-label="Open ${esc(p.title)}">
+          <div class="rp-cover" ${bg}>
+            ${_me ? `<div class="card-actions">
+              <button class="ca-btn ca-stream" title="Stream" data-action="stream">
+                <svg viewBox="0 0 24 24" width="9" height="9" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+              </button>
+              <button class="ca-btn ca-add" title="Add to collection" data-action="add">
+                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><g class="icon-plus"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></g><polyline class="icon-check" points="4,13 9,18 20,7"/></svg>
+              </button>
+              <button class="ca-btn ca-ll" title="Listen later" data-action="ll">
+                <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,15"/></svg>
+              </button>
+            </div>` : ''}
+          </div>
+          <div class="rp-body">
+            <p class="rp-title">${esc(p.title)}</p>
+            <p class="rp-artist">${esc(p.artist)}</p>
+            ${genreLabel ? `<span class="genre-tag">${esc(genreLabel)}</span>` : ''}
+          </div>
+        </div>
+      `;
+      card.querySelector('.rp-card-btn').addEventListener('click', () => {
+        location.href = '/album/' + p.spotifyId;
+      });
+      if (_me) {
+        card.querySelectorAll('.ca-btn').forEach(btn => {
+          btn.addEventListener('click', async e => {
+            e.stopPropagation();
+            const action = btn.dataset.action;
+            if (action === 'stream') {
+              openStreamPop(btn, p.title, p.artist, p.spotifyId);
+            } else if (action === 'add') {
+              try {
+                const r = await fetch(`/crate/${encodeURIComponent(p.spotifyId)}`, { method: 'POST' });
+                if (r.ok) {
+                  const d = await r.json();
+                  btn.classList.toggle('ca-btn--active', d.inCrate);
+                  _crateIds[d.inCrate ? 'add' : 'delete'](p.spotifyId);
+                  showToast(d.inCrate ? 'Added to Collection' : 'Removed from Collection');
+                }
+              } catch {}
+            } else if (action === 'll') {
+              try {
+                const r = await fetch(`/listen-later/${encodeURIComponent(p.spotifyId)}`, { method: 'POST' });
+                if (r.ok) {
+                  const d = await r.json();
+                  btn.classList.toggle('ca-btn--active', d.inListenLater);
+                  _llIds[d.inListenLater ? 'add' : 'delete'](p.spotifyId);
+                  showToast(d.inListenLater ? 'Added to Listen Later' : 'Removed from Listen Later');
+                }
+              } catch {}
+            }
+          });
+        });
+        card.querySelector('.ca-add')?.classList.toggle('ca-btn--active', _crateIds.has(p.spotifyId));
+        card.querySelector('.ca-ll')?.classList.toggle('ca-btn--active', _llIds.has(p.spotifyId));
+      }
+      return card;
+    }
+
+    function initGenreFilters() {
+      const filtersEl    = document.getElementById('arc-genre-filters');
+      const subfiltersEl = document.getElementById('arc-genre-subfilters');
+      const hasGenre = _allPicks.some(p => p.genre);
+      if (!hasGenre) { filtersEl.hidden = true; return; }
+      filtersEl.hidden = false;
+
+      const usedGenres = new Set(_allPicks.map(p => p.genre?.split(',')[0].trim()).filter(Boolean));
+      filtersEl.querySelectorAll('.genre-filter-btn[data-genre]').forEach(btn => {
+        if (btn.dataset.genre === '') return;
+        btn.style.display = usedGenres.has(btn.dataset.genre) ? '' : 'none';
+      });
+
+      filtersEl.querySelectorAll('.genre-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          filtersEl.querySelectorAll('.genre-filter-btn').forEach(b => b.classList.remove('genre-filter-btn--active'));
+          btn.classList.add('genre-filter-btn--active');
+          _activeGenre    = btn.dataset.genre;
+          _activeSubgenre = '';
+
+          const usedSubs = _activeGenre
+            ? new Set(_allPicks
+                .filter(p => p.genre && p.genre.startsWith(_activeGenre))
+                .map(p => { const parts = p.genre.split(', '); return parts[1] || null; })
+                .filter(Boolean))
+            : new Set();
+          const subs = _activeGenre ? (SUBGENRES[_activeGenre] || []).filter(s => usedSubs.has(s)) : [];
+
+          if (subs.length) {
+            subfiltersEl.innerHTML = subs.map(s =>
+              `<button class="genre-filter-btn genre-filter-btn--sub" data-subgenre="${s}">${s}</button>`
+            ).join('');
+            subfiltersEl.style.display = 'flex';
+            subfiltersEl.style.animation = 'none';
+            subfiltersEl.offsetHeight;
+            subfiltersEl.style.animation = '';
+            subfiltersEl.querySelectorAll('.genre-filter-btn--sub').forEach(sb => {
+              sb.addEventListener('click', () => {
+                subfiltersEl.querySelectorAll('.genre-filter-btn--sub').forEach(b => b.classList.remove('genre-filter-btn--active'));
+                _activeSubgenre = (_activeSubgenre === sb.dataset.subgenre) ? '' : sb.dataset.subgenre;
+                if (_activeSubgenre) sb.classList.add('genre-filter-btn--active');
+                applyFilters();
+              });
+            });
+          } else {
+            subfiltersEl.innerHTML = '';
+            subfiltersEl.style.display = 'none';
+          }
+          applyFilters();
+        });
+      });
+    }
+
+    async function init() {
+      _me = await initHeader({ active: 'archive' });
+
+      if (_me) {
+        try {
+          const [crateRes, llRes] = await Promise.all([
+            fetch('/crate'),
+            fetch('/listen-later'),
+          ]);
+          if (crateRes.ok) { const d = await crateRes.json(); _crateIds = new Set((d.albums || []).map(a => a.spotifyId)); }
+          if (llRes.ok)    { const d = await llRes.json();    _llIds    = new Set((d.albums || []).map(a => a.spotifyId)); }
+        } catch {}
+      }
+
+      // Fetch picks + weeks in parallel
+      const [picksRes, weeksRes] = await Promise.all([
+        fetch('/archive/picks'),
+        fetch('/archive/weeks'),
+      ]);
+
+      if (picksRes.ok) {
+        const d = await picksRes.json();
+        _allPicks = d.picks || [];
+        renderGrid(_allPicks);
+        initGenreFilters();
+      }
+
+      if (weeksRes.ok) {
+        const d = await weeksRes.json();
+        const sel = document.getElementById('arc-week-select');
+        (d.weeks || []).forEach(wk => {
+          const opt = document.createElement('option');
+          opt.value       = wk;
+          opt.textContent = fmtWeek(wk);
+          sel.appendChild(opt);
+        });
+      }
+
+      // Wire search (debounced)
+      let searchTimer;
+      document.getElementById('arc-search').addEventListener('input', e => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          _searchQ = e.target.value.trim().toLowerCase();
+          applyFilters();
+        }, 200);
+      });
+
+      // Wire week select
+      document.getElementById('arc-week-select').addEventListener('change', e => {
+        _activeWeek = e.target.value;
+        applyFilters();
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
