@@ -2537,7 +2537,7 @@ span.comment-author:hover { text-decoration: none; }
 .splash-feature-header {
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
 }
-.splash-feature-label { font-size: .8125rem; font-weight: 700; }
+.splash-feature-label { font-size: .8125rem; font-weight: 700; color: var(--text); }
 .splash-chevron {
   flex-shrink: 0; color: var(--muted);
   transition: transform .2s ease;
