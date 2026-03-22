@@ -97,6 +97,7 @@ async function initHeader({ active = null } = {}) {
             <button class="user-menu-btn" id="hdr-chip">${esc(uname)}</button>
             <div class="user-menu-dropdown" id="hdr-dropdown" hidden>
               <a href="/u/${encodeURIComponent(uname)}" class="user-menu-item">My Shelf</a>
+              <a href="/settings" class="user-menu-item">Settings</a>
               ${user.isSupporter
                 ? `<span class="user-menu-item user-menu-item--supporter">Supporter <span class="supporter-star">★</span></span>`
                 : `<button class="user-menu-item" id="hdr-support">Support ARVL <span class="supporter-star">★</span></button>`}
@@ -166,6 +167,7 @@ async function initHeader({ active = null } = {}) {
                   <button type="button" class="genre-pill" data-genre="Metal">Metal</button>
                   <button type="button" class="genre-pill" data-genre="World">World</button>
                   <button type="button" class="genre-pill" data-genre="Ambient">Ambient</button>
+                  <button type="button" class="genre-pill" data-genre="Funk">Funk</button>
                   <button type="button" class="genre-pill" data-genre="Blues">Blues</button>
                 </div>
               </div>
@@ -210,6 +212,7 @@ async function initHeader({ active = null } = {}) {
       'Folk & Country': ['Folk Rock','Indie Folk','Celtic Folk','Bluegrass','Anti-Folk','Folk Metal','Americana','Outlaw Country','Country Pop','Bro-Country','Red Dirt','Nashville Sound','Honky-Tonk'],
       'World':          ['Afrobeats','Reggaeton','Salsa','Bachata','Regional Mexican','Bongo Flava','Worldbeat','K-Pop','Brazil','Africa','Asia'],
       'Ambient':        ['Dark Ambient','Drone','Nature Sounds','Space Ambient','Neo-Classical Ambient','Ambient Electronic'],
+      'Funk':           ['P-Funk','Funk Rock','Go-Go','Boogie','Afrofunk','Jazz-Funk','Electrofunk'],
       'Blues':          ['Delta Blues','Chicago Blues','Texas Blues','Piedmont Blues','Jump Blues','Swamp Blues','Soul Blues','British Blues'],
     };
 
