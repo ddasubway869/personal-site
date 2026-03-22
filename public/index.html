@@ -13,7 +13,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
   <script>if(sessionStorage.getItem('arvl_intro_done'))document.documentElement.classList.add('skip-intro');</script>
-  <link rel="stylesheet" href="style.css?v=133" />
+  <link rel="stylesheet" href="style.css?v=134" />
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -31,7 +31,7 @@
     <!-- Search -->
     <section class="search-section">
       <h1 class="search-heading">What are you listening to this week?</h1>
-      <p class="search-sub">Each week, every member puts forward one album. The top three take their place.</p>
+      <p class="search-sub">Each week, every member puts forward one album. The most loved rise to the top.</p>
       <div class="search-wrap">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"/>
@@ -66,8 +66,7 @@
       <!-- Leaderboard -->
       <section class="lb-section">
         <div class="section-hd">
-          <h2 class="section-title">This week's top three</h2>
-          <span class="week-label" id="week-label"></span>
+          <h2 class="section-title">Trending this month</h2>
         </div>
         <div id="leaderboard">
           <p class="empty-state">No picks yet — be the first!</p>
@@ -392,9 +391,7 @@
       _toastTimer = setTimeout(() => el.classList.remove('toast--visible'), 3500);
     }
 
-    // ── Week labels ────────────────────────────────────────
     const WEEK = isoWeekKey();
-    document.getElementById('week-label').textContent = weekDisplay(WEEK);
 
     // ── Modals ─────────────────────────────────────────────
     function openModal(id) {
@@ -886,7 +883,6 @@
             </div>
           </div>
           <div class="lb-card-footer">
-            <span class="lb-card-count">${a.count} ${a.count === 1 ? 'pick' : 'picks'}</span>
             ${a.genre ? `<span class="genre-tag">${esc(a.genre.includes(', ') ? a.genre.split(', ')[1] : a.genre)}</span>` : ''}
           </div>
         `;
@@ -921,7 +917,7 @@
         const gate = document.createElement('div');
         gate.className = 'lb-locked-gate';
         gate.innerHTML = `
-          <p class="lb-locked-msg">Members only — join to see this week's top three</p>
+          <p class="lb-locked-msg">Members only — join to see what's trending this month</p>
           <button class="btn btn-submit lb-locked-join">Join the club</button>
         `;
         gate.querySelector('.lb-locked-join').addEventListener('click', () => openModal('modal-register'));

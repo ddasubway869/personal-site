@@ -109,6 +109,27 @@ async function fetchDeezerAlbum(deezerId) {
   }
 }
 
+// ── GET /albums/:spotifyId/pickers ───────────────────────────────────────
+// Returns all users who have ever picked this album, for the popover.
+router.get('/:spotifyId/pickers', async (req, res) => {
+  const { spotifyId } = req.params;
+  try {
+    const db = await getDb();
+    const rows = await db.all(
+      `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username
+       FROM   recommendations r
+       JOIN   users u  ON u.id = r.user_id
+       JOIN   albums a ON a.id = r.album_id
+       WHERE  a.spotify_id = ?
+       ORDER  BY r.created_at DESC`,
+      spotifyId
+    );
+    res.json({ pickers: rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // ── GET /albums/also-by?artist=NAME&exclude=TITLE ────────────────────────
 // Must be defined before /:spotifyId to avoid being swallowed by that route.
 // Returns other albums by the same artist via Deezer (no auth required).
@@ -340,7 +361,7 @@ router.get('/:spotifyId', async (req, res) => {
 
     // ── Phase 2 — all derived lookups run in parallel ────
     const userId = req.session?.userId ?? null;
-    const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes, weekPickersRows, listenRow, userListenRow, userCrateRow, userListenLaterRow, genreRow] = await Promise.all([
+    const [pickRow, appleMusicUrl, albumDesc, artistBio, pickNotes, weekPickersRows, listenRow, userListenRow, userCrateRow, userListenLaterRow, genreRow, totalPickRow, totalSaveRow, totalListenLaterRow] = await Promise.all([
       db.get(
         // Also count picks from any dz_* alias of this album (same title+artist)
         // so pick counts survive the Spotify-outage / Deezer-fallback split.
@@ -418,6 +439,10 @@ router.get('/:spotifyId', async (req, res) => {
       ) : Promise.resolve(null),
       // Genre is stored on albums; fetch it separately so Spotify-path gets it too
       fromCache ? Promise.resolve(null) : db.get('SELECT genre FROM albums WHERE spotify_id = ?', spotifyId),
+      // All-time community stats
+      db.get(`SELECT COUNT(r.id) AS n FROM recommendations r JOIN albums a ON a.id = r.album_id WHERE a.spotify_id = ?`, spotifyId),
+      db.get(`SELECT COUNT(c.id) AS n FROM crates c JOIN albums a ON a.id = c.album_id WHERE a.spotify_id = ?`, spotifyId),
+      db.get(`SELECT COUNT(ll.id) AS n FROM listen_later ll JOIN albums a ON a.id = ll.album_id WHERE a.spotify_id = ?`, spotifyId),
     ]);
 
     // For Spotify-fetched albums, attach genre from DB (cache path already has it)
@@ -452,6 +477,9 @@ router.get('/:spotifyId', async (req, res) => {
       isListening:       !!userListenRow,
       isInCrate:         !!userCrateRow,
       isInListenLater:   !!userListenLaterRow,
+      totalPickCount:    totalPickRow?.n ?? 0,
+      totalSaveCount:    totalSaveRow?.n ?? 0,
+      totalListenLaterCount: totalListenLaterRow?.n ?? 0,
       _cached:           fromCache,
     });
   } catch (err) {

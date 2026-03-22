@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
-  <link rel="stylesheet" href="/style.css?v=133"/>
+  <link rel="stylesheet" href="/style.css?v=134"/>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -149,7 +149,7 @@
 
   // ── Render page ─────────────────────────────────────────
   function renderPage(data, me) {
-    const { album, tracks, weekPickCount, comments, appleMusicUrl, description, descriptionSource, pickNotes, isInCrate, isInListenLater, weekPickers } = data;
+    const { album, tracks, weekPickCount, comments, appleMusicUrl, description, descriptionSource, pickNotes, isInCrate, isInListenLater, weekPickers, totalPickCount, totalSaveCount, totalListenLaterCount } = data;
     document.title = `${album.title} — ARVL`;
 
     const artistLinks = (album.artists && album.artists.length
@@ -230,6 +230,16 @@
             </button>` : ''}
         </div>
       </div>
+
+      ${(totalPickCount || totalSaveCount || totalListenLaterCount) ? `
+      <div class="ap-community-section ap-stagger" style="animation-delay:200ms">
+        <h3 class="ap-section-title">Community</h3>
+        <div class="ap-community-stats">
+          ${totalPickCount  ? `<button class="ap-stat-pill ap-stat-pill--btn" id="ap-total-picks-btn"><span class="ap-stat-num">${totalPickCount}</span> <span class="ap-stat-label">${totalPickCount === 1 ? 'pick' : 'picks'}</span></button>` : ''}
+          ${totalSaveCount  ? `<span class="ap-stat-pill"><span class="ap-stat-num">${totalSaveCount}</span> <span class="ap-stat-label">saved</span></span>` : ''}
+          ${totalListenLaterCount ? `<span class="ap-stat-pill"><span class="ap-stat-num">${totalListenLaterCount}</span> <span class="ap-stat-label">listen later</span></span>` : ''}
+        </div>
+      </div>` : ''}
 
       <div class="ap-main ap-stagger" style="animation-delay:240ms">
         <div class="ap-section ap-pick-notes-section"${pickNotes && pickNotes.length ? '' : ' hidden'}>
@@ -369,7 +379,7 @@
         const rect = pickCountBtn.getBoundingClientRect();
         _pickersPop = document.createElement('div');
         _pickersPop.className = 'pickers-popover';
-        _pickersPop.innerHTML = weekPickers.map(p => `
+        _pickersPop.innerHTML = `<div class="pickers-popover-label">This week</div>` + weekPickers.map(p => `
           <div class="picker-row">
             <a href="/u/${esc(p.username)}" class="picker-name">${esc(p.username)}</a>
           </div>`).join('');
@@ -377,6 +387,31 @@
         _pickersPop.style.left = `${rect.left}px`;
         document.body.appendChild(_pickersPop);
         setTimeout(() => document.addEventListener('click', closePickersPop, { once: true }), 0);
+      });
+    }
+
+    // All-time picks popover
+    const totalPicksBtn = document.getElementById('ap-total-picks-btn');
+    if (totalPicksBtn) {
+      totalPicksBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        document.removeEventListener('click', closePickersPop);
+        closePickersPop();
+        const rect = totalPicksBtn.getBoundingClientRect();
+        _pickersPop = document.createElement('div');
+        _pickersPop.className = 'pickers-popover';
+        _pickersPop.innerHTML = '<div class="picker-row" style="color:var(--subtle);font-size:.75rem">Loading…</div>';
+        _pickersPop.style.top  = `${rect.bottom + 6}px`;
+        _pickersPop.style.left = `${rect.left}px`;
+        document.body.appendChild(_pickersPop);
+        setTimeout(() => document.addEventListener('click', closePickersPop, { once: true }), 0);
+        try {
+          const r = await fetch(`/albums/${encodeURIComponent(album.spotifyId)}/pickers`);
+          const d = await r.json();
+          _pickersPop.innerHTML = d.pickers.length
+            ? `<div class="pickers-popover-label">Picked by</div>` + d.pickers.map(p => `<div class="picker-row"><a href="/u/${esc(p.username)}" class="picker-name">${esc(p.username)}</a></div>`).join('')
+            : '<div class="picker-row" style="color:var(--subtle);font-size:.75rem">No picks yet.</div>';
+        } catch { _pickersPop.innerHTML = '<div class="picker-row" style="color:var(--subtle);font-size:.75rem">Could not load.</div>'; }
       });
     }
 

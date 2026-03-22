@@ -47,7 +47,7 @@ function isoWeekKey(date = new Date()) {
 const VALID_GENRES = new Set([
   'Hip-Hop', 'R&B / Soul', 'Pop', 'Rock', 'Electronic',
   'Jazz', 'Classical', 'Folk & Country', 'Metal', 'World',
-  'Ambient', 'Blues',
+  'Ambient', 'Funk', 'Blues',
 ]);
 
 // ── POST /recommend ───────────────────────────────────────
@@ -132,12 +132,10 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// ── GET /recommendations?week=<key> ──────────────────────
-// Returns albums ranked by number of recommendations for a given week.
-// week defaults to the current ISO week.
+// ── GET /recommendations ─────────────────────────────────
+// Returns top 3 albums ranked by community score (all-time):
+//   picks × 3 + saves × 2 + listen-laters × 1
 router.get('/', async (req, res) => {
-  const weekKey = req.query.week || isoWeekKey();
-
   try {
     const db   = await getDb();
     const rows = await db.all(
@@ -147,17 +145,20 @@ router.get('/', async (req, res) => {
               a.cover_url    AS coverUrl,
               a.release_year AS releaseYear,
               a.genre,
-              COUNT(r.id)    AS count
-       FROM   recommendations r
-       JOIN   albums a ON a.id = r.album_id
-       WHERE  r.week_key = ?
-       GROUP  BY r.album_id
-       ORDER  BY count DESC, MAX(r.created_at) DESC
-       LIMIT  3`,
-      weekKey
+              (COUNT(DISTINCT r.id) * 3 +
+               COUNT(DISTINCT c.id) * 2 +
+               COUNT(DISTINCT ll.id) * 1) AS count
+       FROM   albums a
+       LEFT JOIN recommendations r  ON r.album_id  = a.id  AND r.created_at  >= strftime('%s', 'now', '-30 days')
+       LEFT JOIN crates c           ON c.album_id  = a.id  AND c.created_at  >= strftime('%s', 'now', '-30 days')
+       LEFT JOIN listen_later ll    ON ll.album_id = a.id  AND ll.created_at >= strftime('%s', 'now', '-30 days')
+       GROUP  BY a.id
+       HAVING count > 0
+       ORDER  BY count DESC
+       LIMIT  10`
     );
 
-    res.json({ weekKey, albums: mergeDzAliases(rows, 3) });
+    res.json({ albums: mergeDzAliases(rows, 3) });
   } catch (err) {
     console.error('Recommendations fetch error:', err.message);
     res.status(500).json({ error: 'Server error.' });
