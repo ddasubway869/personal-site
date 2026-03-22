@@ -115,15 +115,17 @@ router.get('/:spotifyId/pickers', async (req, res) => {
   const { spotifyId } = req.params;
   try {
     const db = await getDb();
-    const rows = await db.all(
+    // For dz_ albums, match by title+artist so picks under both IDs are included
+    const albumRow = await db.get('SELECT title, artist FROM albums WHERE spotify_id = ?', spotifyId);
+    const rows = albumRow ? await db.all(
       `SELECT COALESCE(u.username, SUBSTR(u.email, 1, INSTR(u.email, '@') - 1)) AS username
        FROM   recommendations r
        JOIN   users u  ON u.id = r.user_id
        JOIN   albums a ON a.id = r.album_id
-       WHERE  a.spotify_id = ?
+       WHERE  LOWER(a.title) = LOWER(?) AND LOWER(a.artist) = LOWER(?)
        ORDER  BY r.created_at DESC`,
-      spotifyId
-    );
+      albumRow.title, albumRow.artist
+    ) : [];
     res.json({ pickers: rows });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
@@ -210,7 +212,7 @@ router.get('/:spotifyId', async (req, res) => {
 
       const weekKey = isoWeekKey();
       const userId  = req.session?.userId ?? null;
-      const [pickRow, albumDesc, artistBio, pickNotes, weekPickersRows, listenRow, userListenRow, userCrateRow, userListenLaterRow] = await Promise.all([
+      const [pickRow, albumDesc, artistBio, pickNotes, weekPickersRows, listenRow, userListenRow, userCrateRow, userListenLaterRow, totalPickRow, totalSaveRow, totalListenLaterRow] = await Promise.all([
         db.get(
           `SELECT COUNT(r.id) AS count FROM recommendations r JOIN albums a ON a.id = r.album_id WHERE a.spotify_id = ? AND r.week_key = ?`,
           spotifyId, weekKey
@@ -263,6 +265,10 @@ router.get('/:spotifyId', async (req, res) => {
           `SELECT ll.id FROM listen_later ll JOIN albums a ON a.id = ll.album_id WHERE ll.user_id = ? AND a.spotify_id = ?`,
           userId, spotifyId
         ) : Promise.resolve(null),
+        // All-time community stats — match by title+artist to catch both dz_ and Spotify IDs
+        db.get(`SELECT COUNT(r.id) AS n FROM recommendations r JOIN albums a ON a.id = r.album_id WHERE LOWER(a.title) = LOWER(?) AND LOWER(a.artist) = LOWER(?)`, albumData.title, albumData.artist),
+        db.get(`SELECT COUNT(c.id) AS n FROM crates c JOIN albums a ON a.id = c.album_id WHERE LOWER(a.title) = LOWER(?) AND LOWER(a.artist) = LOWER(?)`, albumData.title, albumData.artist),
+        db.get(`SELECT COUNT(ll.id) AS n FROM listen_later ll JOIN albums a ON a.id = ll.album_id WHERE LOWER(a.title) = LOWER(?) AND LOWER(a.artist) = LOWER(?)`, albumData.title, albumData.artist),
       ]);
 
       // Attach isLiked to pick notes
@@ -294,6 +300,9 @@ router.get('/:spotifyId', async (req, res) => {
         isListening:       !!userListenRow,
         isInCrate:         !!userCrateRow,
         isInListenLater:   !!userListenLaterRow,
+        totalPickCount:    totalPickRow?.n ?? 0,
+        totalSaveCount:    totalSaveRow?.n ?? 0,
+        totalListenLaterCount: totalListenLaterRow?.n ?? 0,
         _deezer:           true,
       });
     } catch (err) {

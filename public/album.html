@@ -211,9 +211,7 @@
       </div>` : ''}
 
       <div class="ap-action-bar ap-stagger" style="animation-delay:160ms">
-        <div class="ap-action-left">
-          ${weekPickCount ? `<button class="ap-pick-count${weekPickers && weekPickers.length ? ' ap-pick-count--clickable' : ''}" id="ap-pick-count-btn">${weekPickCount} ${weekPickCount === 1 ? 'pick' : 'picks'} this week</button>` : ''}
-        </div>
+        <div class="ap-action-left"></div>
         <div class="ap-actions">
           ${me ? `
             <button class="btn-pick btn-pick--solid" id="ap-rec-btn" data-spotify-id="${esc(album.spotifyId)}">Recommend</button>` : ''}
