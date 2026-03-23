@@ -183,18 +183,10 @@ router.get('/recent', async (req, res) => {
        FROM   recommendations r
        JOIN   albums a ON a.id = r.album_id
        WHERE  r.week_key = ?
-         AND  r.album_id NOT IN (
-           SELECT r2.album_id
-           FROM   recommendations r2
-           WHERE  r2.week_key = ?
-           GROUP  BY r2.album_id
-           ORDER  BY COUNT(r2.id) DESC
-           LIMIT  3
-         )
        GROUP  BY r.album_id
        ORDER  BY count DESC, MAX(r.created_at) DESC
        LIMIT  50`,
-      weekKey, weekKey
+      weekKey
     );
     res.json({ picks: mergeDzAliases(rows, 50) });
   } catch (err) {

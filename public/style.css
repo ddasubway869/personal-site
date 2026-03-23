@@ -824,7 +824,6 @@ html.light .icon-moon { display: block; }
   display: flex;
   flex-direction: column;
   border-radius: var(--radius);
-  overflow: hidden;
   background: transparent;
 }
 
@@ -847,6 +846,8 @@ html.light .icon-moon { display: block; }
   background: var(--border);
   background-size: cover;
   background-position: center;
+  overflow: hidden;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 
 .rp-body {
@@ -998,7 +999,6 @@ html.light .icon-moon { display: block; }
   display: flex;
   flex-direction: column;
   border-radius: var(--radius);
-  overflow: hidden;
   background: transparent;
 }
 .lb-card-btn:hover .lb-card-cover {
@@ -1022,6 +1022,8 @@ html.light .icon-moon { display: block; }
   background-size: cover;
   background-position: center;
   position: relative;
+  overflow: hidden;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 
 .lb-card-rank {
@@ -1109,6 +1111,7 @@ html.light .icon-moon { display: block; }
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--muted);
   background: var(--surface);
   border: 1px solid var(--border);
