@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
-  <link rel="stylesheet" href="/style.css?v=121"/>
+  <link rel="stylesheet" href="/style.css?v=141"/>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -101,7 +101,9 @@
     card.querySelector('.profile-card-play-btn').addEventListener('click', e => {
       e.preventDefault(); e.stopPropagation();
       if (_pop) { closePop(); return; }
-      const spotifyHref    = `https://open.spotify.com/album/${spotifyId}`;
+      const _isDz = String(spotifyId).startsWith('dz_');
+      const _q    = encodeURIComponent(title + ' ' + artist);
+      const spotifyHref    = _isDz ? `https://open.spotify.com/search/${_q}` : `https://open.spotify.com/album/${spotifyId}`;
       const appleMusicHref = `https://music.apple.com/us/search?term=${encodeURIComponent(title + ' ' + artist)}`;
       const tidalHref      = `https://tidal.com/search/albums?q=${encodeURIComponent(title + ' ' + artist)}`;
       const deezerHref     = `https://www.deezer.com/search/${encodeURIComponent((title + ' ' + artist).toLowerCase())}/album`;
@@ -142,33 +144,83 @@
     }
   }
 
-  function initProfileFilters(albums, type, tabKey, isSelf) {
-    const filterWrap  = document.getElementById(`pf-filter-${tabKey}`);
-    const gridEl      = document.getElementById(`pf-grid-${tabKey}`);
+  function initTabControls(albums, type, tabKey, isSelf) {
+    const filterWrap = document.getElementById(`pf-filter-${tabKey}`);
+    const gridEl     = document.getElementById(`pf-grid-${tabKey}`);
     if (!filterWrap || !gridEl) return;
 
-    const hasGenre = albums.some(a => a.genre);
-    if (!hasGenre) return;
-
-    const usedCores = [...new Set(albums.map(a => a.genre?.split(', ')[0].trim()).filter(Boolean))];
+    const hasGenre  = albums.some(a => a.genre);
+    const usedCores = hasGenre
+      ? [...new Set(albums.map(a => a.genre?.split(', ')[0].trim()).filter(Boolean))]
+      : [];
 
     filterWrap.innerHTML = `
-      <div class="genre-filters" id="pf-filters-${tabKey}" style="margin-bottom:.5rem">
-        <button class="genre-filter-btn genre-filter-btn--active" data-genre="">All</button>
-        ${usedCores.map(g => `<button class="genre-filter-btn" data-genre="${esc(g)}">${esc(g)}</button>`).join('')}
+      <div class="ap-toolbar">
+        <input type="search" class="ap-search" placeholder="Search albums or artists…" aria-label="Search" />
+        <div class="ap-sort-btns">
+          <button class="ap-sort-btn ap-sort-btn--active" data-sort="date">Date Added</button>
+          <button class="ap-sort-btn" data-sort="title">A-Z</button>
+          <button class="ap-sort-btn" data-sort="artist">Artist</button>
+        </div>
       </div>
-      <div class="genre-subfilters" id="pf-subfilters-${tabKey}" style="display:none;margin-bottom:.5rem"></div>
+      ${hasGenre ? `
+        <div class="genre-filters" id="pf-filters-${tabKey}" style="margin-bottom:.5rem">
+          <button class="genre-filter-btn genre-filter-btn--active" data-genre="">All</button>
+          ${usedCores.map(g => `<button class="genre-filter-btn" data-genre="${esc(g)}">${esc(g)}</button>`).join('')}
+        </div>
+        <div class="genre-subfilters" id="pf-subfilters-${tabKey}" style="display:none;margin-bottom:.5rem"></div>
+      ` : ''}
     `;
 
+    let searchQ    = '';
+    let sortBy     = 'date';
     let activeCore = '';
     let activeSub  = '';
-    const filtersEl    = document.getElementById(`pf-filters-${tabKey}`);
-    const subfiltersEl = document.getElementById(`pf-subfilters-${tabKey}`);
 
-    function rerender(filtered) {
+    function getFiltered() {
+      let result = albums;
+      if (searchQ) {
+        const q = searchQ.toLowerCase();
+        result = result.filter(a =>
+          a.title.toLowerCase().includes(q) || a.artist.toLowerCase().includes(q)
+        );
+      }
+      if (activeCore) {
+        result = result.filter(a => a.genre === activeCore || (a.genre && a.genre.startsWith(activeCore + ',')));
+        if (activeSub) result = result.filter(a => a.genre && a.genre.includes(activeSub));
+      }
+      if (sortBy === 'title')  result = [...result].sort((a, b) => a.title.localeCompare(b.title));
+      if (sortBy === 'artist') result = [...result].sort((a, b) => a.artist.localeCompare(b.artist));
+      return result;
+    }
+
+    function rerender() {
+      const filtered = getFiltered();
       gridEl.innerHTML = albumGrid(filtered, type, isSelf);
       wireOverlayCards(gridEl, type);
     }
+
+    // Search
+    let _searchTimer;
+    filterWrap.querySelector('.ap-search').addEventListener('input', e => {
+      clearTimeout(_searchTimer);
+      _searchTimer = setTimeout(() => { searchQ = e.target.value.trim(); rerender(); }, 200);
+    });
+
+    // Sort
+    filterWrap.querySelectorAll('.ap-sort-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterWrap.querySelectorAll('.ap-sort-btn').forEach(b => b.classList.remove('ap-sort-btn--active'));
+        btn.classList.add('ap-sort-btn--active');
+        sortBy = btn.dataset.sort;
+        rerender();
+      });
+    });
+
+    if (!hasGenre) return;
+
+    const filtersEl    = document.getElementById(`pf-filters-${tabKey}`);
+    const subfiltersEl = document.getElementById(`pf-subfilters-${tabKey}`);
 
     function buildSubRow(core) {
       const usedSubs = new Set(
@@ -194,10 +246,6 @@
           `<button class="genre-filter-btn genre-filter-btn--sub" data-subgenre="${esc(s)}">${esc(s)}</button>`
         ).join('');
         subfiltersEl.style.display = 'flex';
-        subfiltersEl.style.animation = 'none';
-        subfiltersEl.offsetHeight;
-        subfiltersEl.style.animation = '';
-
         subfiltersEl.querySelectorAll('.genre-filter-btn--sub').forEach(sb => {
           sb.addEventListener('click', () => {
             subfiltersEl.querySelectorAll('.genre-filter-btn--sub').forEach(b => b.classList.remove('genre-filter-btn--active'));
@@ -207,21 +255,14 @@
               sb.classList.add('genre-filter-btn--active');
               activeSub = sb.dataset.subgenre;
             }
-            const filtered = activeSub
-              ? albums.filter(a => a.genre && a.genre.includes(activeSub))
-              : albums.filter(a => a.genre && (a.genre === activeCore || a.genre.startsWith(activeCore + ',')));
-            rerender(filtered);
+            rerender();
           });
         });
       } else {
         subfiltersEl.innerHTML = '';
         subfiltersEl.style.display = 'none';
       }
-
-      const filtered = activeCore
-        ? albums.filter(a => a.genre === activeCore || (a.genre && a.genre.startsWith(activeCore + ',')))
-        : albums;
-      rerender(filtered);
+      rerender();
     });
   }
 
@@ -230,35 +271,79 @@
     const joined = data.createdAt
       ? new Date(data.createdAt * 1000).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
       : '';
-    const pickCount     = (data.picks || []).length;
-    const followerCount = data.followerCount ?? 0;
-    const initial       = (data.username || username || '?')[0].toUpperCase();
+    const followerCount  = data.followerCount  ?? 0;
+    const followingCount = data.followingCount ?? 0;
+    const initial        = (data.username || username || '?')[0].toUpperCase();
 
     const _picks = data.picks       || [];
     const _crate = data.crate       || [];
     const _later = data.listenLater || [];
 
+    // Top genres from picks — up to 3 most common
+    const genreCounts = {};
+    _picks.forEach(p => {
+      if (!p.genre) return;
+      const core = p.genre.split(', ')[0].trim();
+      genreCounts[core] = (genreCounts[core] || 0) + 1;
+    });
+    const topGenres = Object.entries(genreCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([g]) => g);
+
+    // Current week's pick (Monday-keyed)
+    const _now = new Date();
+    const _mon = new Date(_now);
+    _mon.setUTCDate(_now.getUTCDate() - ((_now.getUTCDay() + 6) % 7));
+    const currentWeekKey = _mon.toISOString().split('T')[0];
+    const weekPick = _picks.find(p => p.weekKey === currentWeekKey) || _picks[0] || null;
+
     const main = document.getElementById('page-main');
     main.innerHTML = `
-      <div class="up-profile-header up-profile-header--page">
-        <div class="up-avatar">${esc(initial)}</div>
-        <div class="up-profile-info">
-          <h1 class="up-username">${esc(data.username || username)}${data.isSupporter ? '<span class="supporter-star" title="ARVL Supporter">★</span>' : ''}</h1>
-          <p class="up-meta">
-            ${joined ? `Member since ${joined}` : ''}
-            ${pickCount ? ` · ${pickCount} ${pickCount === 1 ? 'pick' : 'picks'}` : ''}
-             · ${followerCount} ${followerCount === 1 ? 'follower' : 'followers'}
-          </p>
+      <div class="up-hero">
+        <div class="up-hero-left">
+          <div class="up-hero-avatar">${esc(initial)}</div>
+          <div class="up-hero-info">
+            <div class="up-hero-top">
+              <h1 class="up-hero-name">${esc(data.username || username)}${data.isSupporter ? '<span class="supporter-star" title="ARVL Supporter">★</span>' : ''}</h1>
+              ${!data.isSelf && me ? `
+                <button class="btn up-follow-btn${data.isFollowing ? ' up-follow-btn--following' : ''}" id="up-follow-btn">
+                  ${data.isFollowing ? 'Following' : 'Follow'}
+                </button>` : ''}
+            </div>
+            ${data.bio ? `<p class="up-hero-bio">${esc(data.bio)}</p>` : ''}
+            ${joined ? `<p class="up-hero-since">Member since ${joined}</p>` : ''}
+            ${topGenres.length ? `<div class="up-hero-genres">${topGenres.map(g => `<span class="up-genre-pill">${esc(g)}</span>`).join('')}</div>` : ''}
+          </div>
+        </div>
+        <div class="up-hero-stats">
+          <div class="up-stat"><span class="up-stat-num">${_picks.length}</span><span class="up-stat-label">Picks</span></div>
+          <div class="up-stat"><span class="up-stat-num">${_crate.length}</span><span class="up-stat-label">Saved</span></div>
+          <div class="up-stat"><span class="up-stat-num">${followingCount}</span><span class="up-stat-label">Following</span></div>
         </div>
       </div>
-      ${!data.isSelf && me ? `
-        <button class="btn up-follow-btn${data.isFollowing ? ' up-follow-btn--following' : ''}" id="up-follow-btn">
-          ${data.isFollowing ? 'Following' : 'Follow'}
-        </button>` : ''}
-      <nav class="ap-tabs" style="margin-top:1rem">
-        <button class="ap-tab-btn ap-tab-btn--active" data-tab="picks">Picks</button>
-        <button class="ap-tab-btn" data-tab="crate">Collection</button>
-        <button class="ap-tab-btn" data-tab="later">Listen Later</button>
+
+      ${weekPick ? `
+      <div class="up-shelf-row">
+        ${weekPick ? `
+        <div class="up-shelf-col up-shelf-col--week-pick">
+          <p class="up-featured-label">This Week's Pick</p>
+          <a href="/album/${esc(weekPick.spotifyId)}" class="up-week-pick">
+            <div class="up-week-pick-cover" ${weekPick.coverUrl ? `style="background-image:url('${esc(weekPick.coverUrl)}')"` : ''}></div>
+            <div class="up-week-pick-info">
+              <p class="up-week-pick-title">${esc(weekPick.title)}</p>
+              <p class="up-week-pick-artist">${esc(weekPick.artist)}${weekPick.releaseYear ? `<span class="up-week-pick-year"> · ${esc(String(weekPick.releaseYear))}</span>` : ''}</p>
+              ${weekPick.note ? `<p class="up-week-pick-note">"${esc(weekPick.note)}"</p>` : ''}
+            </div>
+          </a>
+        </div>` : ''}
+
+      </div>` : ''}
+
+      <nav class="ap-tabs" style="margin-top:0">
+        <button class="ap-tab-btn ap-tab-btn--active" data-tab="picks">Picks <span class="ap-tab-count">${_picks.length}</span></button>
+        <button class="ap-tab-btn" data-tab="crate">Collection <span class="ap-tab-count">${_crate.length}</span></button>
+        <button class="ap-tab-btn" data-tab="later">Listen Later <span class="ap-tab-count">${_later.length}</span></button>
       </nav>
 
       <div class="ap-tab-panel" id="up-tab-picks">
@@ -288,23 +373,22 @@
     const tabParam = new URLSearchParams(location.search).get('tab');
     if (tabParam) showProfileTab(tabParam);
 
-    // Genre filters per tab
-    initProfileFilters(_picks, 'picks', 'picks', data.isSelf);
-    initProfileFilters(_crate, 'crate', 'crate', data.isSelf);
-    initProfileFilters(_later, 'later', 'later', data.isSelf);
+    // Tab controls (search, sort, genre filters) per tab
+    initTabControls(_picks, 'picks', 'picks', data.isSelf);
+    initTabControls(_crate, 'crate', 'crate', data.isSelf);
+    initTabControls(_later, 'later', 'later', data.isSelf);
 
     // Wire overlay cards (initial render)
     wireOverlayCards(document.getElementById('pf-grid-crate'),  'crate');
     wireOverlayCards(document.getElementById('pf-grid-later'), 'later');
 
     // Follow button
-    document.getElementById('up-follow-btn')?.addEventListener('click', async () => {
-      const btn = document.getElementById('up-follow-btn');
+    document.getElementById('up-follow-btn')?.addEventListener('click', async function() {
       const r = await fetch(`/u/${encodeURIComponent(username)}/follow`, { method: 'POST' });
       if (!r.ok) return;
       const d = await r.json();
-      btn.textContent = d.following ? 'Following' : 'Follow';
-      btn.classList.toggle('up-follow-btn--following', d.following);
+      this.textContent = d.following ? 'Following' : 'Follow';
+      this.classList.toggle('up-follow-btn--following', d.following);
     });
   }
 
@@ -317,6 +401,7 @@
       if (!r.ok) { document.getElementById('page-main').innerHTML = '<p class="cp-empty">User not found.</p>'; return; }
       const data = await r.json();
       renderPage(data, me);
+
     } catch {
       document.getElementById('page-main').innerHTML = '<p class="cp-empty">Failed to load profile.</p>';
     }

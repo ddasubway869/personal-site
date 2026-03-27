@@ -246,6 +246,9 @@ async function getDb() {
       expires_at INTEGER NOT NULL,
       used       INTEGER NOT NULL DEFAULT 0
     )`,
+    // Profile personalisation
+    'ALTER TABLE users ADD COLUMN bio TEXT',
+    'ALTER TABLE users ADD COLUMN lastfm_username TEXT',
   ]) {
     try { await _db.run(stmt); } catch { /* column already exists */ }
   }

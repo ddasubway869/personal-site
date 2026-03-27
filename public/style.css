@@ -3978,7 +3978,6 @@ html.light .cp-status-badge--resolved { color: #15803d; border-color: #15803d; b
   justify-content: space-between;
   gap: 1.5rem;
   padding: .5rem 0 1.5rem;
-  border-bottom: 1px solid var(--border);
   margin-bottom: 0;
 }
 .up-hero-left {
@@ -4114,6 +4113,112 @@ html.light .cp-status-badge--resolved { color: #15803d; border-color: #15803d; b
   transition: opacity .15s;
 }
 .up-featured-item:hover .up-featured-cover { opacity: .8; }
+
+/* This Week's Pick */
+.up-shelf-col--week-pick { flex: 1 1 auto; min-width: 0; width: 100%; }
+.up-week-pick {
+  display: flex;
+  gap: 1.1rem;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  transition: border-color .15s;
+}
+.up-week-pick:hover { border-color: var(--muted); }
+.up-week-pick-cover {
+  flex: 0 0 120px;
+  width: 120px;
+  height: 120px;
+  border-radius: 5px;
+  background: var(--border) center/cover no-repeat;
+  transition: opacity .15s;
+}
+.up-week-pick:hover .up-week-pick-cover { opacity: .85; }
+.up-week-pick-info {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  min-width: 0;
+}
+.up-week-pick-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.up-week-pick-artist {
+  font-size: .85rem;
+  color: var(--muted);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.up-week-pick-year {
+  font-size: .78rem;
+  color: var(--subtle);
+}
+.up-week-pick-note {
+  font-size: .78rem;
+  color: var(--subtle);
+  font-style: italic;
+  margin: .3rem 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Previous Picks strip */
+.up-shelf-col--prev-picks {
+  flex: 0 0 200px;
+  min-width: 0;
+}
+.up-prev-picks-list {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+.up-prev-pick-item {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  text-decoration: none;
+  color: inherit;
+}
+.up-prev-pick-cover {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  border-radius: 4px;
+  background: var(--border) center/cover no-repeat;
+  transition: opacity .15s;
+}
+.up-prev-pick-item:hover .up-prev-pick-cover { opacity: .8; }
+.up-prev-pick-info { min-width: 0; }
+.up-prev-pick-title {
+  font-size: .78rem;
+  font-weight: 600;
+  margin: 0 0 .1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.up-prev-pick-artist {
+  font-size: .7rem;
+  color: var(--muted);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .up-featured-note {
   font-size: .7rem;
   color: var(--subtle);
@@ -4367,76 +4472,16 @@ html.light .cp-status-badge--resolved { color: #15803d; border-color: #15803d; b
 }
 
 /* ── Last.fm strip ──────────────────────────────────────── */
-.up-lastfm {
-  margin-bottom: 1.5rem;
-}
-.up-lastfm-grid {
-  display: flex;
-  gap: .65rem;
-  flex-wrap: wrap;
-}
-.up-lastfm-item {
-  flex: 0 0 calc(16.66% - .55rem);
-  min-width: 80px;
-  max-width: 110px;
-  text-decoration: none;
-  color: inherit;
-}
-.up-lastfm-cover {
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 4px;
-  background: var(--surface) center/cover no-repeat;
-  border: 1px solid var(--border);
-  margin-bottom: .3rem;
-  transition: opacity .15s;
-}
-.up-lastfm-item:hover .up-lastfm-cover { opacity: .8; }
-.up-lastfm-name {
-  font-size: .7rem;
-  font-weight: 500;
-  margin: 0 0 .1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.up-lastfm-artist {
-  font-size: .65rem;
-  color: var(--subtle);
-  margin: 0 0 .1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.up-lastfm-plays {
-  font-size: .6rem;
-  color: var(--muted);
-  margin: 0;
-}
-.up-lastfm-loading {
-  font-size: .8rem;
-  color: var(--subtle);
-  margin: 0;
-}
-@media (max-width: 600px) {
-  .up-lastfm-item { flex: 0 0 calc(33.33% - .45rem); }
-}
-
-/* ── Profile shelf row (Recent Picks + Last.fm side by side) */
+/* ── Profile shelf row */
 .up-shelf-row {
   display: flex;
   align-items: flex-start;
   gap: 0;
-  padding: 1.25rem 0;
-  border-bottom: 1px solid var(--border);
+  padding: 0 0 1.5rem;
   margin-bottom: 0;
 }
 .up-shelf-col {
   flex: 0 0 auto;
-  min-width: 0;
-}
-.up-shelf-col--lastfm {
-  flex: 1;
   min-width: 0;
 }
 .up-shelf-divider {

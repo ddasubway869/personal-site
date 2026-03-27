@@ -24,6 +24,7 @@ const notifRoutes          = require('./routes/notifications');
 const scheduler            = require('./lib/scheduler');
 
 const supportRoutes         = require('./routes/support');
+const settingsRoutes        = require('./routes/settings');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -98,6 +99,16 @@ async function start() {
   });
 
   app.use('/notifications',   notifRoutes);
+
+  // Settings — serve HTML for browsers, API for fetch()
+  app.get('/settings', (req, res, next) => {
+    if (req.headers['accept']?.includes('text/html')) {
+      if (!req.session.userId) return res.redirect('/');
+      return res.sendFile(path.join(__dirname, 'public', 'settings.html'));
+    }
+    next();
+  });
+  app.use('/settings', settingsRoutes);
 
   app.post('/contact', async (req, res) => {
     const { name, email, message } = req.body;

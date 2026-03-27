@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Settings — ARVL</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)"/>
+  <meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)"/>
+  <link rel="stylesheet" href="/style.css?v=135"/>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  </script>
+</head>
+<body>
+  <header id="site-header"></header>
+  <main class="page-container" id="page-main">
+    <p class="ap-loading">Loading…</p>
+  </main>
+
+  <script src="/js/common.js?v=6"></script>
+  <script>
+  'use strict';
+
+  (async () => {
+    const me = await initHeader({ active: null });
+    if (!me) { location.href = '/'; return; }
+
+    // Fetch current settings
+    let settings = {};
+    try {
+      const r = await fetch('/settings/me');
+      if (r.ok) settings = await r.json();
+    } catch {}
+
+    const main = document.getElementById('page-main');
+    main.innerHTML = `
+      <div class="settings-page">
+        <h1 class="settings-title">Settings</h1>
+
+        <!-- Profile -->
+        <section class="settings-section">
+          <h2 class="settings-section-title">Profile</h2>
+          <div class="field">
+            <label for="s-bio">Bio <span class="form-label-opt">(optional)</span></label>
+            <textarea id="s-bio" class="settings-textarea" maxlength="200" rows="3"
+              placeholder="Tell the community about your taste…">${esc(settings.bio || '')}</textarea>
+            <p class="field-hint"><span id="s-bio-count">${(settings.bio || '').length}</span> / 200</p>
+          </div>
+        </section>
+
+        <!-- Notifications -->
+        <section class="settings-section">
+          <h2 class="settings-section-title">Notifications</h2>
+          <label class="settings-toggle-row">
+            <div class="settings-toggle-track">
+              <input type="checkbox" id="s-notifs" class="settings-toggle-input" ${settings.emailOptOut ? '' : 'checked'}/>
+              <span class="settings-toggle-thumb"></span>
+            </div>
+            <div>
+              <p class="settings-toggle-label">Weekly picks email</p>
+              <p class="settings-toggle-sub">Receive a weekly recap of community picks</p>
+            </div>
+          </label>
+        </section>
+
+        <!-- Account -->
+        <section class="settings-section">
+          <h2 class="settings-section-title">Account</h2>
+          <div class="settings-account-row">
+            <span class="settings-account-label">Email</span>
+            <span class="settings-account-value">${esc(settings.email || '')}</span>
+          </div>
+          <div class="settings-account-row">
+            <span class="settings-account-label">Password</span>
+            <button class="link-btn" id="s-change-pass">Change password →</button>
+          </div>
+        </section>
+
+        <div class="settings-footer">
+          <button class="btn btn-submit" id="s-save">Save changes</button>
+          <p class="form-status" id="s-status" aria-live="polite"></p>
+        </div>
+      </div>
+    `;
+
+    document.title = 'Settings — ARVL';
+
+    // Bio char count
+    const bioEl   = document.getElementById('s-bio');
+    const bioCount = document.getElementById('s-bio-count');
+    bioEl.addEventListener('input', () => { bioCount.textContent = bioEl.value.length; });
+
+    // Save
+    document.getElementById('s-save').addEventListener('click', async () => {
+      const btn    = document.getElementById('s-save');
+      const status = document.getElementById('s-status');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      status.textContent = ''; status.className = 'form-status';
+      try {
+        const r = await fetch('/settings', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bio:         document.getElementById('s-bio').value.trim() || null,
+            emailOptOut: !document.getElementById('s-notifs').checked,
+          }),
+        });
+        if (!r.ok) throw new Error();
+        // Bust session cache so header re-fetches user
+        sessionStorage.removeItem('arvl_u4');
+        status.textContent = 'Saved!';
+        status.className = 'form-status ok';
+      } catch {
+        status.textContent = 'Something went wrong.';
+        status.className = 'form-status err';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save changes';
+      }
+    });
+
+    // Change password — trigger forgot flow via email
+    document.getElementById('s-change-pass').addEventListener('click', async () => {
+      const btn    = document.getElementById('s-change-pass');
+      const status = document.getElementById('s-status');
+      btn.textContent = 'Sending link…';
+      try {
+        await fetch('/auth/forgot', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: settings.email }),
+        });
+        status.textContent = 'Password reset link sent to your email.';
+        status.className = 'form-status ok';
+      } catch {
+        status.textContent = 'Something went wrong.';
+        status.className = 'form-status err';
+      } finally {
+        btn.textContent = 'Change password →';
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

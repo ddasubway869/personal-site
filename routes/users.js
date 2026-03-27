@@ -15,7 +15,9 @@ router.get('/:username', requireAuth, async (req, res) => {
       `SELECT id,
               COALESCE(username, SUBSTR(email, 1, INSTR(email, '@') - 1)) AS username,
               is_supporter,
-              created_at AS createdAt
+              created_at      AS createdAt,
+              bio,
+              lastfm_username AS lastfmUsername
        FROM   users
        WHERE  LOWER(COALESCE(username, SUBSTR(email, 1, INSTR(email, '@') - 1))) = LOWER(?)`,
       username
@@ -24,12 +26,14 @@ router.get('/:username', requireAuth, async (req, res) => {
 
     const isSelf = req.session.userId === user.id;
 
-    const [followRow, followCountRow] = await Promise.all([
+    const [followRow, followCountRow, followingCountRow] = await Promise.all([
       db.get('SELECT 1 FROM user_follows WHERE follower_id = ? AND following_id = ?', req.session.userId, user.id),
       db.get('SELECT COUNT(*) AS cnt FROM user_follows WHERE following_id = ?', user.id),
+      db.get('SELECT COUNT(*) AS cnt FROM user_follows WHERE follower_id = ?', user.id),
     ]);
-    const isFollowing   = !!followRow;
-    const followerCount = followCountRow?.cnt ?? 0;
+    const isFollowing    = !!followRow;
+    const followerCount  = followCountRow?.cnt  ?? 0;
+    const followingCount = followingCountRow?.cnt ?? 0;
 
     const [picks, crate, listenLater] = await Promise.all([
       db.all(
@@ -75,7 +79,7 @@ router.get('/:username', requireAuth, async (req, res) => {
       ) : Promise.resolve([]),
     ]);
 
-    res.json({ username: user.username, isSupporter: !!user.is_supporter, createdAt: user.createdAt, picks, crate, listenLater, isSelf, isFollowing, followerCount });
+    res.json({ username: user.username, isSupporter: !!user.is_supporter, createdAt: user.createdAt, bio: user.bio || null, lastfmUsername: user.lastfmUsername || null, picks, crate, listenLater, isSelf, isFollowing, followerCount, followingCount });
   } catch (err) {
     console.error('User profile error:', err.message);
     res.status(500).json({ error: 'Server error.' });
