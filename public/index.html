@@ -1198,14 +1198,17 @@
       const appleMusicHref  = appleMusicUrl || `https://music.apple.com/us/search?term=${q}`;
       const tidalHref       = `https://tidal.com/search/albums?q=${q}`;
       const deezerHref      = `https://www.deezer.com/search/${encodeURIComponent((title + ' ' + artist).toLowerCase())}/album`;
+      const ytMusicHref     = `https://music.youtube.com/search?q=${q}`;
       const rect = anchorEl.getBoundingClientRect();
       _sharedStreamPop = document.createElement('div');
       _sharedStreamPop.className = 'stream-popover';
       _sharedStreamPop.innerHTML = `
         <a class="stream-option stream-option--spotify" href="${spotifyHref}"    target="_blank" rel="noopener">Spotify</a>
         <a class="stream-option stream-option--apple"   href="${appleMusicHref}" target="_blank" rel="noopener">Apple Music</a>
+        <a class="stream-option"                        href="${ytMusicHref}"    target="_blank" rel="noopener">YouTube Music</a>
         <a class="stream-option stream-option--tidal"   href="${tidalHref}"      target="_blank" rel="noopener">Tidal</a>
         <a class="stream-option stream-option--deezer"  href="${deezerHref}"     target="_blank" rel="noopener">Deezer</a>
+        <a class="stream-option"                        href="https://play.qobuz.com/search" target="_blank" rel="noopener">Qobuz</a>
       `;
       _sharedStreamPop.style.top   = `${rect.bottom + 6}px`;
       _sharedStreamPop.style.right = `${window.innerWidth - rect.right}px`;
