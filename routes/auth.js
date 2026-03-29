@@ -140,10 +140,13 @@ router.get('/verify/:token', async (req, res) => {
       req.params.token
     );
 
-    if (!row) return res.status(400).send('Invalid or already used verification link.');
+    const expiredHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link Expired — ARVL</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0d0d0d;color:#f5f4f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center}.card{max-width:380px}.brand{font-size:1.1rem;font-weight:700;letter-spacing:-.03em;margin-bottom:2rem;display:block;text-decoration:none;color:inherit}h1{font-size:1.4rem;font-weight:700;margin-bottom:.75rem}p{color:#888;font-size:.9rem;line-height:1.6;margin-bottom:1.5rem}a.btn{display:inline-block;padding:10px 22px;background:#f5f4f0;color:#0d0d0d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.9rem}a.back{color:#666;margin-top:1rem;display:inline-block;font-size:.85rem}</style>
+</head><body><div class="card"><a href="/" class="brand">ARVL</a><h1>Verification link expired.</h1><p>That link is no longer valid. Enter your email and we'll send a fresh one.</p><a href="/auth/resend-verification" class="btn">Resend verification email</a><br><a href="/" class="back">Back to ARVL</a></div></body></html>`;
+    if (!row) return res.status(400).send(expiredHtml);
     if (Math.floor(Date.now() / 1000) > row.expires_at) {
       await db.run('DELETE FROM verification_tokens WHERE token = ?', req.params.token);
-      return res.status(400).send('Verification link expired. Please register again.');
+      return res.status(400).send(expiredHtml);
     }
 
     await db.run('UPDATE users SET verified = 1 WHERE id = ?', row.user_id);
@@ -154,6 +157,106 @@ router.get('/verify/:token', async (req, res) => {
     console.error('Verify error:', err.message);
     res.status(500).send('Server error.');
   }
+});
+
+// ── GET /auth/resend-verification ────────────────────────
+router.get('/resend-verification', (req, res) => {
+  res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Resend Verification — ARVL</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0d0d0d;color:#f5f4f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center}.card{max-width:380px;width:100%}.brand{font-size:1.1rem;font-weight:700;letter-spacing:-.03em;margin-bottom:2rem;display:block;text-decoration:none;color:inherit}h1{font-size:1.4rem;font-weight:700;margin-bottom:.75rem}p{color:#888;font-size:.9rem;line-height:1.6;margin-bottom:1.5rem}input{width:100%;padding:12px 14px;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#f5f4f0;font-size:.95rem;margin-bottom:1rem}input:focus{outline:none;border-color:#555}button{width:100%;padding:12px;background:#f5f4f0;color:#0d0d0d;border:none;border-radius:8px;font-weight:600;font-size:.95rem;cursor:pointer}#msg{margin-top:1rem;font-size:.875rem;color:#888;min-height:1.2em}a.back{color:#666;margin-top:1.25rem;display:inline-block;font-size:.85rem}</style>
+</head><body><div class="card"><a href="/" class="brand">ARVL</a><h1>Resend verification</h1><p>Enter the email address you used to sign up and we'll send a new link.</p>
+<input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+<button id="btn">Send verification email</button>
+<div id="msg"></div>
+<a href="/" class="back">Back to ARVL</a></div>
+<script>
+document.getElementById('btn').addEventListener('click', async () => {
+  const email = document.getElementById('email').value.trim();
+  const msg   = document.getElementById('msg');
+  const btn   = document.getElementById('btn');
+  if (!email) { msg.textContent = 'Please enter your email.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    const r = await fetch('/auth/resend-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      msg.style.color = '#4caf50';
+      msg.textContent = 'Check your inbox — a new link is on its way.';
+      btn.style.display = 'none';
+    } else {
+      msg.textContent = d.error || 'Something went wrong.';
+      btn.disabled = false;
+      btn.textContent = 'Send verification email';
+    }
+  } catch {
+    msg.textContent = 'Network error. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Send verification email';
+  }
+});
+</script>
+</body></html>`);
+});
+
+// ── POST /auth/resend-verification ───────────────────────
+router.post('/resend-verification', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required.' });
+
+  const db   = await getDb();
+  const user = await db.get(
+    'SELECT id, username, verified FROM users WHERE email = ?',
+    email.toLowerCase().trim()
+  );
+
+  // Don't reveal whether the email exists
+  if (!user || user.verified) return res.json({ ok: true });
+
+  // Delete any existing token and issue a fresh one
+  await db.run('DELETE FROM verification_tokens WHERE user_id = ?', user.id);
+  const token  = crypto.randomBytes(32).toString('hex');
+  const expiry = Math.floor(Date.now() / 1000) + TOKEN_TTL;
+  await db.run(
+    'INSERT INTO verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
+    user.id, token, expiry
+  );
+
+  const verifyUrl = `${process.env.BASE_URL}/auth/verify/${token}`;
+  try {
+    await mailer.sendMail({
+      from:    process.env.MAIL_FROM,
+      to:      email,
+      subject: 'Verify your ARVL account',
+      text:    `Hey ${user.username},\n\nHere's a fresh verification link:\n\n${verifyUrl}\n\nIt expires in 24 hours.\n\n— ARVL`,
+      html:    `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0f0f0f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:48px 16px;">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
+<tr><td style="padding-bottom:32px;"><a href="${process.env.BASE_URL}" style="font-size:1.1rem;font-weight:700;letter-spacing:-.03em;color:#f5f4f0;text-decoration:none;">ARVL</a></td></tr>
+<tr><td style="background:#1a1a1a;border-radius:12px;padding:32px;">
+  <p style="margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#666;">Account</p>
+  <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:#fff;">Verify your email</h1>
+  <p style="margin:0 0 32px;font-size:15px;line-height:1.65;color:#999;">Hey ${user.username}, here's your new verification link.</p>
+  <table cellpadding="0" cellspacing="0"><tr>
+    <td style="background:#ffffff;border-radius:8px;">
+      <a href="${verifyUrl}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#0f0f0f;text-decoration:none;border-radius:8px;">Verify my account</a>
+    </td>
+  </tr></table>
+  <p style="margin:24px 0 0;font-size:12px;color:#555;word-break:break-all;"><a href="${verifyUrl}" style="color:#888;text-decoration:underline;">${verifyUrl}</a></p>
+  <p style="margin:16px 0 0;font-size:13px;color:#444;line-height:1.6;">This link expires in 24 hours.</p>
+</td></tr>
+</table></td></tr></table>
+</body></html>`,
+    });
+  } catch (err) {
+    console.error('Resend verification mail error:', err.message);
+  }
+
+  res.json({ ok: true });
 });
 
 // ── POST /auth/login ──────────────────────────────────────
