@@ -13,7 +13,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
   <script>if(sessionStorage.getItem('arvl_intro_done'))document.documentElement.classList.add('skip-intro');</script>
-  <link rel="stylesheet" href="style.css?v=134" />
+  <link rel="stylesheet" href="style.css?v=136" />
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -54,6 +54,24 @@
 
     <!-- Picks page (full-viewport, fades in on scroll) -->
     <div class="picks-page" id="picks-page">
+
+      <!-- Stats bar (logged-in users only, mobile) -->
+      <div class="home-stats-bar" id="home-stats-bar" hidden>
+        <div class="home-stat">
+          <span class="home-stat-value" id="stat-picks">—</span>
+          <span class="home-stat-label">Picks</span>
+        </div>
+        <div class="home-stat-divider"></div>
+        <div class="home-stat">
+          <span class="home-stat-value" id="stat-collection">—</span>
+          <span class="home-stat-label">Collection</span>
+        </div>
+        <div class="home-stat-divider"></div>
+        <div class="home-stat">
+          <span class="home-stat-value" id="stat-streak">—</span>
+          <span class="home-stat-label">Streak</span>
+        </div>
+      </div>
 
       <!-- My pick (shown when logged in) -->
       <section class="my-pick-section" id="my-pick-section" hidden>
@@ -240,6 +258,28 @@
     </div>
   </div>
 
+  <!-- ── Search action sheet (mobile) ────────────────────── -->
+  <div class="sr-sheet-overlay" id="sr-sheet-overlay" hidden></div>
+  <div class="sr-sheet" id="sr-sheet" hidden>
+    <div class="sr-sheet-drag"></div>
+    <div class="sr-sheet-album" id="sr-sheet-album"></div>
+    <div class="sr-sheet-actions">
+      <button class="sr-sheet-btn" id="sr-sheet-recommend">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        Recommend
+      </button>
+      <button class="sr-sheet-btn" id="sr-sheet-crate">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>
+        Add to Collection
+      </button>
+      <button class="sr-sheet-btn" id="sr-sheet-ll">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Add to Listen Later
+      </button>
+    </div>
+    <button class="sr-sheet-cancel-btn" id="sr-sheet-cancel">Cancel</button>
+  </div>
+
   <!-- ── Mini player ────────────────────────────────────── -->
   <div class="mp-tray" id="mp-tray">
     <div class="mp-tracklist" id="mp-tracklist" hidden></div>
@@ -274,7 +314,7 @@
     </div>
   </aside>
 
-  <script src="/js/common.js?v=6"></script>
+  <script src="/js/common.js?v=8"></script>
   <script>
     // ── Utilities ──────────────────────────────────────────
     function isoWeekKey(d = new Date()) {
@@ -403,10 +443,17 @@
     }
 
     document.querySelectorAll('[data-close]').forEach(btn =>
-      btn.addEventListener('click', () => closeModal(btn.dataset.close))
+      btn.addEventListener('click', () => {
+        if (btn.dataset.close === 'modal-pick-note') closePickNoteModal();
+        else closeModal(btn.dataset.close);
+      })
     );
     document.querySelectorAll('.modal-overlay').forEach(overlay =>
-      overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay.id); })
+      overlay.addEventListener('click', e => {
+        if (e.target !== overlay) return;
+        if (overlay.id === 'modal-pick-note') closePickNoteModal();
+        else closeModal(overlay.id);
+      })
     );
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
@@ -711,11 +758,12 @@
         closeModal('modal-login');
         sessionStorage.removeItem('arvl_u3');
         sessionStorage.removeItem('arvl_u4');
-        me = await initHeader({ active: null });
+        me = await initHeader({ active: 'home' });
         document.getElementById('my-pick-section').hidden = false;
         loadMyPick();
         loadMyLists();
         checkSpotifyStatus();
+        loadStats();
         loadLeaderboard();
         loadRecentPicks();
         if (sessionStorage.getItem('freshVerify')) {
@@ -764,7 +812,7 @@
         e.target.reset();
         sessionStorage.removeItem('arvl_u3');
         sessionStorage.removeItem('arvl_u4');
-        me = await initHeader({ active: null });
+        me = await initHeader({ active: 'home' });
         // Show welcome moment
         document.getElementById('welcome-name').textContent = username;
         openModal('modal-welcome');
@@ -780,6 +828,19 @@
     document.getElementById('welcome-pick-btn').addEventListener('click', () => {
       closeModal('modal-welcome');
     });
+
+    // ── Stats bar ───────────────────────────────────────────
+    async function loadStats() {
+      try {
+        const r = await fetch('/stats');
+        if (!r.ok) return;
+        const { picks, collection, streak } = await r.json();
+        document.getElementById('stat-picks').textContent      = picks;
+        document.getElementById('stat-collection').textContent = collection;
+        document.getElementById('stat-streak').textContent     = streak > 0 ? `${streak}w` : '—';
+        document.getElementById('home-stats-bar').hidden = false;
+      } catch { /* silently skip */ }
+    }
 
     // ── My lists (crate + listen later) ────────────────────
     async function loadMyLists() {
@@ -820,7 +881,7 @@
     function renderMyPick(album) {
       const el = document.getElementById('my-pick-inner');
       if (!album) {
-        el.innerHTML = `<p class="my-pick-empty">No pick yet — search above to cast your vote.</p>`;
+        el.innerHTML = `<p class="my-pick-empty">No pick yet — tap + to search and cast your vote.</p>`;
         return;
       }
       const bg = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
@@ -885,8 +946,10 @@
           <div class="lb-card-footer">
             ${a.genre ? `<span class="genre-tag">${esc(a.genre.includes(', ') ? a.genre.split(', ')[1] : a.genre)}</span>` : ''}
           </div>
+          ${me ? `<button class="lb-card-plus" aria-label="Actions">+</button>` : ''}
         `;
         card.querySelector('.lb-card-btn').addEventListener('click', () => { location.href = '/album/' + a.spotifyId; });
+        card.querySelector('.lb-card-plus')?.addEventListener('click', e => { e.stopPropagation(); openSearchActionSheet(a); });
         card.querySelectorAll('.ca-btn').forEach(btn => {
           btn.addEventListener('click', async e => {
             e.stopPropagation();
@@ -962,7 +1025,29 @@
       document.getElementById('pick-subgenre-card').style.display = 'none';
       document.getElementById('pick-subgenre-pills').innerHTML = '';
       document.getElementById('pick-genre-wrap').style.display = _pickNoteEditMode ? 'none' : 'flex';
-      openModal('modal-pick-note');
+      openPickNoteModal_show();
+    }
+
+    function openPickNoteModal_show() {
+      const el = document.getElementById('modal-pick-note');
+      if (window.innerWidth <= 767) {
+        el.hidden = false;
+        requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('pn-open')));
+      } else {
+        openModal('modal-pick-note');
+      }
+    }
+
+    function closePickNoteModal() {
+      const el = document.getElementById('modal-pick-note');
+      if (window.innerWidth <= 767) {
+        el.classList.remove('pn-open');
+        el.querySelector('.modal').addEventListener('transitionend', () => {
+          el.hidden = true;
+        }, { once: true });
+      } else {
+        closePickNoteModal();
+      }
     }
 
     async function doRecommend(album, note = null, genre = null) {
@@ -984,6 +1069,7 @@
         showToast('Error saving pick.', 'err');
       }
     }
+    window._arvlPickModal = openPickNoteModal;
 
     const SUBGENRES = {
       'Hip-Hop':        ['Trap', 'Boom Bap', 'G-Funk', 'Drill', 'Conscious Rap', 'Mumble Rap', 'Lo-Fi Hip-Hop', 'Jazz Rap', 'Southern Rap', 'Crunk', 'Bounce', 'Emo Rap', 'Alternative', 'Experimental', 'Chillhop'],
@@ -1049,7 +1135,7 @@
     document.getElementById('pick-note-input').addEventListener('input', e => {
       document.getElementById('pick-note-chars').textContent = e.target.value.length;
     });
-    document.getElementById('pick-note-cancel').addEventListener('click', () => closeModal('modal-pick-note'));
+    document.getElementById('pick-note-cancel').addEventListener('click', () => closePickNoteModal());
     document.getElementById('pick-note-submit').addEventListener('click', async () => {
       const note   = document.getElementById('pick-note-input').value.trim() || null;
       const genre  = document.getElementById('pick-genre-select').value || null;
@@ -1072,13 +1158,13 @@
           const d = await r.json();
           if (!r.ok) { status.textContent = d.error || 'Error saving note.'; status.className = 'form-status err'; btn.disabled = false; return; }
           myPickNote = note;
-          closeModal('modal-pick-note');
+          closePickNoteModal();
           showToast(note ? 'Note saved.' : 'Note removed.');
         } catch { status.textContent = 'Something went wrong.'; status.className = 'form-status err'; }
         btn.disabled = false;
       } else {
         await doRecommend(_pendingPickAlbum, note, genre);
-        closeModal('modal-pick-note');
+        closePickNoteModal();
         btn.disabled = false;
       }
     });
@@ -1156,20 +1242,90 @@
               <span class="sr-meta">${album.releaseYear ? esc(album.releaseYear) : ''}</span>
             </div>
           </button>
-          <button class="btn-pick ${isPick ? 'btn-pick--active' : ''}"
+          <button class="btn-pick sr-pick-desktop ${isPick ? 'btn-pick--active' : ''}"
                   data-spotify-id="${esc(album.spotifyId)}"
                   ${isPick ? 'disabled' : ''}>
             ${isPick ? 'Your pick ✓' : 'Recommend'}
+          </button>
+          <button class="sr-plus-btn sr-pick-mobile" aria-label="Actions for ${esc(album.title)}">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
         `;
         row.style.animationDelay = `${albums.indexOf(album) * 55}ms`;
         row.querySelector('.sr-main').addEventListener('click', () => {
           location.href = '/album/' + album.spotifyId;
         });
-        row.querySelector('.btn-pick').addEventListener('click', () => openPickNoteModal(album));
+        row.querySelector('.sr-pick-desktop').addEventListener('click', () => openPickNoteModal(album));
+        row.querySelector('.sr-plus-btn').addEventListener('click', () => openSearchActionSheet(album));
         el.appendChild(row);
       });
     }
+
+    // ── Search action sheet ─────────────────────────────────
+    let _srSheetAlbum = null;
+
+    function openSearchActionSheet(album) {
+      _srSheetAlbum = album;
+      const bg = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
+      document.getElementById('sr-sheet-album').innerHTML = `
+        <div class="sr-sheet-art" ${bg}></div>
+        <div class="sr-sheet-meta">
+          <p class="sr-sheet-title">${esc(album.title)}</p>
+          <p class="sr-sheet-artist">${esc(album.artist)}</p>
+        </div>`;
+      const overlay = document.getElementById('sr-sheet-overlay');
+      const sheet   = document.getElementById('sr-sheet');
+      overlay.hidden = false;
+      sheet.hidden   = false;
+      document.body.style.overflow = 'hidden';
+      requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add('sr-sheet--open')));
+    }
+    window._arvlActionSheet = openSearchActionSheet;
+
+    function closeSearchActionSheet() {
+      const sheet   = document.getElementById('sr-sheet');
+      const overlay = document.getElementById('sr-sheet-overlay');
+      sheet.classList.remove('sr-sheet--open');
+      document.body.style.overflow = '';
+      sheet.addEventListener('transitionend', () => {
+        sheet.hidden   = true;
+        overlay.hidden = true;
+        _srSheetAlbum  = null;
+      }, { once: true });
+    }
+
+    document.getElementById('sr-sheet-overlay').addEventListener('click', closeSearchActionSheet);
+    document.getElementById('sr-sheet-cancel').addEventListener('click', closeSearchActionSheet);
+
+    document.getElementById('sr-sheet-recommend').addEventListener('click', () => {
+      const album = _srSheetAlbum;
+      closeSearchActionSheet();
+      if (album) setTimeout(() => openPickNoteModal(album), 350);
+    });
+
+    document.getElementById('sr-sheet-crate').addEventListener('click', async () => {
+      const album = _srSheetAlbum;
+      closeSearchActionSheet();
+      if (!album) return;
+      try {
+        const r = await fetch(`/crate/${encodeURIComponent(album.spotifyId)}`, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) { showToast(d.error || 'Could not add to collection.', 'err'); return; }
+        showToast(d.inCrate === false ? `Removed from collection.` : `Added to collection.`);
+      } catch { showToast('Something went wrong.', 'err'); }
+    });
+
+    document.getElementById('sr-sheet-ll').addEventListener('click', async () => {
+      const album = _srSheetAlbum;
+      closeSearchActionSheet();
+      if (!album) return;
+      try {
+        const r = await fetch(`/listen-later/${encodeURIComponent(album.spotifyId)}`, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) { showToast(d.error || 'Could not add to listen later.', 'err'); return; }
+        showToast(d.inListenLater === false ? `Removed from listen later.` : `Added to listen later.`);
+      } catch { showToast('Something went wrong.', 'err'); }
+    });
 
     function rerenderPickButtons() {
       const hasPick = !!myPickId;
@@ -1416,7 +1572,7 @@
 
     // ── Init ───────────────────────────────────────────────
     (async () => {
-      me = await initHeader({ active: null });
+      me = await initHeader({ active: 'home' });
       if (me) maybeShowSplash(me);
 
       // Wire header auth events (for home-page modals)
@@ -1433,6 +1589,7 @@
         loadMyPick();
         loadMyLists();
         checkSpotifyStatus();
+        loadStats();
       }
 
       loadLeaderboard();
@@ -1607,8 +1764,10 @@
               ${p.genre ? `<span class="genre-tag">${esc(p.genre.includes(', ') ? p.genre.split(', ')[1] : p.genre)}</span>` : ''}
             </div>
           </div>
+          ${me ? `<button class="rp-card-plus" aria-label="Actions">+</button>` : ''}
         `;
         card.querySelector('.rp-card-btn').addEventListener('click', () => { location.href = '/album/' + p.spotifyId; });
+        card.querySelector('.rp-card-plus')?.addEventListener('click', e => { e.stopPropagation(); openSearchActionSheet(p); });
         card.querySelectorAll('.ca-btn').forEach(btn => {
           btn.addEventListener('click', async e => {
             e.stopPropagation();

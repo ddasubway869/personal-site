@@ -81,6 +81,9 @@ async function initHeader({ active = null } = {}) {
   header.className = 'site-header';
   header.innerHTML = `
     <div class="header-inner">
+      <button class="hdr-hamburger" id="hdr-hamburger" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
       <a href="/" class="brand">ARVL</a>
       <div class="header-right">
         ${user ? `<button class="btn-nav btn-spotify" id="hdr-btn-spotify">Connect <svg class="spotify-logo" viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg></button>` : ''}
@@ -120,13 +123,75 @@ async function initHeader({ active = null } = {}) {
       </div>
     </div>`;
 
-  // Theme toggle
+  // Theme toggle (header — desktop only; panel handles mobile)
   document.getElementById('hdr-theme').addEventListener('click', () => {
     const html = document.documentElement;
     const light = html.classList.contains('light');
     html.classList.replace(light ? 'light' : 'dark', light ? 'dark' : 'light');
     localStorage.setItem('theme', light ? 'dark' : 'light');
   });
+
+  // ── Mobile side-nav panel ─────────────────────────────────
+  if (!document.getElementById('mobile-nav-panel')) {
+    const _wrap = document.createElement('div');
+    _wrap.innerHTML = `
+      <div class="mobile-nav-overlay" id="mobile-nav-overlay" hidden></div>
+      <aside class="mobile-nav-panel" id="mobile-nav-panel" hidden>
+        <div class="mobile-nav-top">
+          ${user ? `<span class="mobile-nav-username">${esc(uname)}</span>` : ''}
+        </div>
+        <nav class="mobile-nav-links">
+          ${user ? `
+            <a href="/settings" class="mobile-nav-link">Settings</a>
+            <button class="mobile-nav-link mobile-nav-link--btn" id="mobile-nav-signout">Sign out</button>
+          ` : ''}
+        </nav>
+        <div class="mobile-nav-bottom">
+          <button class="mobile-nav-theme" id="mobile-nav-theme">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <span class="mobile-nav-theme-label">Dark mode</span>
+          </button>
+        </div>
+      </aside>
+    `;
+    document.body.appendChild(_wrap);
+
+    function _openMobileNav() {
+      document.getElementById('mobile-nav-overlay').hidden = false;
+      document.getElementById('mobile-nav-panel').hidden   = false;
+      document.body.style.overflow = 'hidden';
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.getElementById('mobile-nav-panel').classList.add('mobile-nav-panel--open');
+      }));
+    }
+    function _closeMobileNav() {
+      const panel = document.getElementById('mobile-nav-panel');
+      panel.classList.remove('mobile-nav-panel--open');
+      panel.addEventListener('transitionend', () => {
+        panel.hidden = true;
+        document.getElementById('mobile-nav-overlay').hidden = true;
+        document.body.style.overflow = '';
+      }, { once: true });
+    }
+
+    document.getElementById('hdr-hamburger').addEventListener('click', _openMobileNav);
+    document.getElementById('mobile-nav-overlay').addEventListener('click', _closeMobileNav);
+
+    document.getElementById('mobile-nav-theme').addEventListener('click', () => {
+      const html = document.documentElement;
+      const light = html.classList.contains('light');
+      html.classList.replace(light ? 'light' : 'dark', light ? 'dark' : 'light');
+      localStorage.setItem('theme', light ? 'dark' : 'light');
+    });
+
+    document.getElementById('mobile-nav-signout')?.addEventListener('click', async () => {
+      sessionStorage.removeItem('arvl_u3');
+      sessionStorage.removeItem('arvl_u4');
+      await fetch('/auth/logout', { method: 'POST' });
+      location.href = '/';
+    });
+  }
 
   // ── Header search panel (non-home pages) ─────────────────
   if (user && window.location.pathname !== '/') {
@@ -474,6 +539,8 @@ async function initHeader({ active = null } = {}) {
       }
     }
 
+    window._arvlPickModal = _hdrOpenPickModal;
+
     // ── Wire events ──────────────────────────────────────────
     document.getElementById('hdr-search-btn').addEventListener('click', _hdrOpenPanel);
     document.getElementById('hdr-sp-overlay').addEventListener('click', _hdrClosePanel);
@@ -712,7 +779,13 @@ async function initHeader({ active = null } = {}) {
     const since = parseInt(localStorage.getItem(`notif_seen_${uname}`), 10) || 0;
     fetch(`/notifications/count?since=${since}`)
       .then(r => r.json())
-      .then(d => { const dot = document.getElementById('notif-dot'); if (dot) dot.hidden = !(d.count > 0); })
+      .then(d => {
+        const hasUnread = d.count > 0;
+        const dot = document.getElementById('notif-dot');
+        if (dot) dot.hidden = !hasUnread;
+        const bnDot = document.getElementById('bn-notif-dot');
+        if (bnDot) bnDot.hidden = !hasUnread;
+      })
       .catch(() => {});
 
     // Notification dropdown
@@ -799,6 +872,141 @@ async function initHeader({ active = null } = {}) {
         _notifClose = () => { notifDrop.hidden = true; };
         document.addEventListener('click', _notifClose, { once: true });
       }, 0);
+    });
+  }
+
+  // ── Bottom nav (mobile only) ─────────────────────────────
+  if (user && !document.getElementById('bottom-nav')) {
+    const profileHref = `/u/${encodeURIComponent(uname)}`;
+    const bn = document.createElement('nav');
+    bn.id = 'bottom-nav';
+    bn.className = 'bottom-nav';
+    const tab = (href, label, svg, isActive) => `
+      <a href="${href}" class="bn-tab${isActive ? ' bn-tab--active' : ''}">
+        ${svg}
+        <span class="bn-label">${label}</span>
+      </a>`;
+    bn.innerHTML =
+      tab('/', 'Home',
+        `<svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+        active === 'home') +
+      tab('/community', 'Community',
+        `<svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+        active === 'community') +
+      `<button class="bn-tab bn-tab--plus" id="bn-plus-btn" aria-label="Search">
+        <span class="bn-plus-circle">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </span>
+      </button>` +
+      tab('/notifications', 'Notifications',
+        `<span class="bn-icon-wrap"><svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="bn-dot" id="bn-notif-dot" hidden></span></span>`,
+        active === 'notifications') +
+      tab(profileHref, 'Profile',
+        `<svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+        active === 'profile');
+    document.body.appendChild(bn);
+
+    // ── Bottom search sheet ───────────────────────────────────
+    if (!document.getElementById('bn-sheet')) {
+      const _bsw = document.createElement('div');
+      _bsw.innerHTML = `
+        <div class="bn-sheet-overlay" id="bn-sheet-overlay" hidden></div>
+        <div class="bn-sheet" id="bn-sheet" hidden>
+          <div class="bn-sheet-results" id="bn-sheet-results"></div>
+          <div class="bn-sheet-header">
+            <input class="bn-sheet-input" id="bn-sheet-input" type="search" placeholder="Search albums…" autocomplete="off" spellcheck="false">
+            <button class="bn-sheet-cancel" id="bn-sheet-cancel">Cancel</button>
+          </div>
+        </div>`;
+      document.body.appendChild(_bsw);
+    }
+
+    let _bnTimer = null;
+
+    function _bnOpenSheet() {
+      const overlay = document.getElementById('bn-sheet-overlay');
+      const sheet   = document.getElementById('bn-sheet');
+      overlay.hidden = false;
+      sheet.hidden   = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add('bn-sheet--open')));
+      setTimeout(() => document.getElementById('bn-sheet-input').focus(), 200);
+    }
+
+    function _bnCloseSheet() {
+      const overlay = document.getElementById('bn-sheet-overlay');
+      const sheet   = document.getElementById('bn-sheet');
+      clearTimeout(_bnTimer);
+      document.getElementById('bn-sheet-input').value = '';
+      document.getElementById('bn-sheet-results').innerHTML = '';
+      sheet.classList.remove('bn-sheet--open');
+      sheet.classList.add('bn-sheet--closing');
+      sheet.addEventListener('animationend', () => {
+        sheet.classList.remove('bn-sheet--closing');
+        sheet.hidden   = true;
+        overlay.hidden = true;
+      }, { once: true });
+    }
+
+    async function _bnDoSearch(q) {
+      const results = document.getElementById('bn-sheet-results');
+      results.innerHTML = '<p class="sp-loading">Searching…</p>';
+      try {
+        const r = await fetch(`/search?q=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        const albums = d.albums ?? [];
+        if (!albums.length) { results.innerHTML = '<p class="sp-loading">No results found.</p>'; return; }
+        results.innerHTML = '';
+        // column-reverse CSS puts index 0 (best match) at the bottom, nearest the input
+        albums.forEach(album => {
+          const row = document.createElement('div');
+          row.className = 'bn-result-row';
+          const bg = album.coverUrl ? `style="background-image:url('${esc(album.coverUrl)}')"` : '';
+          row.innerHTML = `
+            <button class="bn-result-main">
+              <div class="bn-result-art" ${bg}></div>
+              <div class="bn-result-info">
+                <span class="bn-result-title">${esc(album.title)}</span>
+                <span class="bn-result-artist">${esc(album.artist)}</span>
+              </div>
+            </button>
+            <button class="bn-result-plus">+</button>`;
+          row.querySelector('.bn-result-main').addEventListener('click', () => {
+            _bnCloseSheet();
+            location.href = '/album/' + album.spotifyId;
+          });
+          row.querySelector('.bn-result-plus').addEventListener('click', () => {
+            _bnCloseSheet();
+            if (typeof window._arvlActionSheet === 'function') {
+              window._arvlActionSheet(album);
+            } else if (typeof window._arvlPickModal === 'function') {
+              window._arvlPickModal(album);
+            } else {
+              location.href = '/album/' + album.spotifyId;
+            }
+          });
+          results.appendChild(row);
+        });
+      } catch {
+        results.innerHTML = '<p class="sp-loading">Search failed. Try again.</p>';
+      }
+    }
+
+    document.getElementById('bn-plus-btn').addEventListener('click', _bnOpenSheet);
+    document.getElementById('bn-sheet-overlay').addEventListener('click', _bnCloseSheet);
+    document.getElementById('bn-sheet-cancel').addEventListener('click', _bnCloseSheet);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !document.getElementById('bn-sheet').hidden) _bnCloseSheet();
+    });
+
+    const _bnInput = document.getElementById('bn-sheet-input');
+    _bnInput.addEventListener('input', e => {
+      clearTimeout(_bnTimer);
+      const q = e.target.value.trim();
+      if (!q) { document.getElementById('bn-sheet-results').innerHTML = '<p class="sp-loading">Start typing to search…</p>'; return; }
+      _bnTimer = setTimeout(() => _bnDoSearch(q), 380);
+    });
+    _bnInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { clearTimeout(_bnTimer); const q = _bnInput.value.trim(); if (q) _bnDoSearch(q); }
     });
   }
 

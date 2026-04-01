@@ -174,6 +174,19 @@ router.get('/also-by', async (req, res) => {
         releaseYear: a.release_date ? String(a.release_date).slice(0, 4) : null,
       }));
 
+    // Upsert into DB so crate/listen-later endpoints can find them
+    if (albums.length) {
+      const db = await getDb();
+      await Promise.all(albums.map(a =>
+        db.run(
+          `INSERT INTO albums (spotify_id, title, artist, cover_url, release_year)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(spotify_id) DO NOTHING`,
+          a.spotifyId, a.title, a.artist, a.coverUrl, a.releaseYear
+        ).catch(() => {})
+      ));
+    }
+
     res.json({ albums });
   } catch {
     clearTimeout(tid);

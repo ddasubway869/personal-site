@@ -110,6 +110,57 @@ async function start() {
   });
   app.use('/settings', settingsRoutes);
 
+  // Archive — members only
+  app.get('/archive', (req, res) => {
+    if (!req.session.userId) return res.redirect('/');
+    res.sendFile(path.join(__dirname, 'public', 'archive.html'));
+  });
+  app.use('/archive', archiveRoutes);
+
+  // ── GET /stats — user stats for home screen ──────────────
+  app.get('/stats', async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: 'Not logged in' });
+    const db = await getDb();
+    const userId = req.session.userId;
+
+    // Total picks
+    const { picks } = await db.get('SELECT COUNT(*) AS picks FROM recommendations WHERE user_id = ?', userId);
+
+    // Collection size
+    const { collection } = await db.get('SELECT COUNT(*) AS collection FROM crates WHERE user_id = ?', userId);
+
+    // Streak: consecutive ISO weeks ending at current week
+    const rows = await db.all(
+      'SELECT DISTINCT week_key FROM recommendations WHERE user_id = ? ORDER BY week_key DESC',
+      userId
+    );
+    let streak = 0;
+    if (rows.length) {
+      // Build expected week sequence going backwards from current week
+      function isoWeekKey(date = new Date()) {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+        return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+      }
+      function prevWeek(key) {
+        const [year, w] = key.split('-W').map(Number);
+        const d = new Date(Date.UTC(year, 0, 1));
+        d.setUTCDate(d.getUTCDate() + (w - 1) * 7 - (d.getUTCDay() || 7) + 1);
+        d.setUTCDate(d.getUTCDate() - 7);
+        return isoWeekKey(d);
+      }
+      const weekSet = new Set(rows.map(r => r.week_key));
+      let cur = isoWeekKey();
+      // Allow current week to be missing (in progress)
+      if (!weekSet.has(cur)) cur = prevWeek(cur);
+      while (weekSet.has(cur)) { streak++; cur = prevWeek(cur); }
+    }
+
+    res.json({ picks, collection, streak });
+  });
+
   app.post('/contact', async (req, res) => {
     const { name, email, message } = req.body;
     if (!name || !email || !message) {

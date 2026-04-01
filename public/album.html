@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
-  <link rel="stylesheet" href="/style.css?v=134"/>
+  <link rel="stylesheet" href="/style.css?v=145"/>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -70,7 +70,7 @@
     </div>
   </div>
 
-  <script src="/js/common.js?v=6"></script>
+  <script src="/js/common.js?v=8"></script>
   <script>
   'use strict';
 
@@ -181,10 +181,16 @@
       ? (album.genre.includes(', ') ? album.genre.split(', ')[1] : album.genre)
       : null;
 
+    const hiResCover = album.coverUrl
+      ? album.coverUrl
+          .replace('/ab67616d00001e02', '/ab67616d0000b273')  // Spotify 300→640
+          .replace('/250x250-', '/500x500-')                   // Deezer 250→500
+      : null;
     const main = document.getElementById('page-main');
     main.innerHTML = `
+      <div class="ap-above-fold">
       <div class="ap-hero">
-        ${album.coverUrl ? `<div class="ap-cover ap-cover--page ap-stagger" style="background-image:url('${esc(album.coverUrl)}');animation-delay:0ms"></div>` : ''}
+        ${hiResCover ? `<div class="ap-cover ap-cover--page ap-stagger" style="background-image:url('${esc(hiResCover)}');animation-delay:0ms"></div>` : ''}
         <div class="ap-meta ap-stagger" style="animation-delay:80ms">
           <h1 class="ap-title">${esc(album.title)}</h1>
           <p class="ap-artist">${artistLinks}</p>
@@ -214,19 +220,43 @@
         <div class="ap-action-left"></div>
         <div class="ap-actions">
           ${me ? `
-            <button class="btn-pick btn-pick--solid" id="ap-rec-btn" data-spotify-id="${esc(album.spotifyId)}">Recommend</button>` : ''}
+            <button class="btn-pick btn-pick--solid ap-desktop-action" id="ap-rec-btn" data-spotify-id="${esc(album.spotifyId)}">Recommend</button>` : ''}
           ${playBtnHtml}
           ${me ? `
-            <button class="btn-add ${isInCrate ? 'btn-add--active' : ''}" id="ap-add-btn" title="Add to collection">
+            <button class="btn-add ap-desktop-action ${isInCrate ? 'btn-add--active' : ''}" id="ap-add-btn" title="Add to collection">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                 <g class="icon-plus"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></g>
                 <polyline class="icon-check" points="4,13 9,18 20,7"/>
               </svg>
             </button>
-            <button class="btn-ll ${isInListenLater ? 'btn-ll--active' : ''}" id="ap-ll-btn" title="Listen later">
+            <button class="btn-ll ap-desktop-action ${isInListenLater ? 'btn-ll--active' : ''}" id="ap-ll-btn" title="Listen later">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,15"/></svg>
-            </button>` : ''}
+            </button>
+            <button class="ap-mobile-plus" id="ap-mobile-plus">+</button>` : ''}
         </div>
+      </div>
+
+      <div class="ap-mobile-bar ap-stagger" style="animation-delay:160ms">
+        <div class="ap-mobile-bar-row">
+          <button class="ap-mobile-act-btn" id="ap-mob-stream">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+            <span>Stream</span>
+          </button>
+          ${me ? `
+          <button class="ap-mobile-act-btn ${isInCrate ? 'ap-mobile-act-btn--active' : ''}" id="ap-mob-crate">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <g class="icon-plus"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/></g>
+              <polyline class="icon-check" points="4,13 9,18 20,7"/>
+            </svg>
+            <span>Collection</span>
+          </button>
+          <button class="ap-mobile-act-btn ${isInListenLater ? 'ap-mobile-act-btn--active' : ''}" id="ap-mob-ll">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,15"/></svg>
+            <span>Listen Later</span>
+          </button>` : ''}
+        </div>
+        ${me ? `<button class="ap-mob-rec-btn" id="ap-mob-rec">Recommend</button>` : ''}
+      </div>
       </div>
 
       ${(totalPickCount || totalSaveCount || totalListenLaterCount) ? `
@@ -639,12 +669,11 @@
     window.addEventListener('pagehide', stopPreview, { once: true });
 
     // Play / Stream popover
-    const playBtn = document.getElementById('ap-play-btn');
-    if (playBtn) {
+    {
       let _streamPop = null;
       const closeStreamPop = () => { if (_streamPop) { _streamPop.remove(); _streamPop = null; } };
-      playBtn.addEventListener('click', e => {
-        e.stopPropagation();
+      const openStreamPop = (anchorEl, e) => {
+        if (e) e.stopPropagation();
         if (_streamPop) { closeStreamPop(); return; }
         const spotifyHref    = album._deezer
           ? `https://open.spotify.com/search/${encodeURIComponent(album.title + ' ' + album.artist)}`
@@ -653,7 +682,7 @@
         const tidalHref      = `https://tidal.com/search/albums?q=${encodeURIComponent(album.title + ' ' + album.artist)}`;
         const deezerHref     = `https://www.deezer.com/search/${encodeURIComponent((album.title + ' ' + album.artist).toLowerCase())}/album`;
         const ytMusicHref    = `https://music.youtube.com/search?q=${encodeURIComponent(album.title + ' ' + album.artist)}`;
-        const rect = playBtn.getBoundingClientRect();
+        const rect = anchorEl.getBoundingClientRect();
         _streamPop = document.createElement('div');
         _streamPop.className = 'stream-popover';
         _streamPop.innerHTML = `
@@ -664,17 +693,43 @@
           <a class="stream-option" href="${deezerHref}"     target="_blank" rel="noopener">Deezer</a>
           <a class="stream-option" href="https://play.qobuz.com/search" target="_blank" rel="noopener">Qobuz</a>
         `;
+        const popW = 165;
+        const centered = rect.left + rect.width / 2 - popW / 2;
+        const clamped  = Math.max(8, Math.min(centered, window.innerWidth - popW - 8));
         _streamPop.style.top  = `${rect.bottom + 6}px`;
-        _streamPop.style.left = `${rect.left}px`;
+        _streamPop.style.left = `${clamped}px`;
         document.body.appendChild(_streamPop);
         setTimeout(() => document.addEventListener('click', closeStreamPop, { once: true }), 0);
-      });
+      };
+      const playBtn = document.getElementById('ap-play-btn');
+      if (playBtn) playBtn.addEventListener('click', e => openStreamPop(playBtn, e));
+      // Mobile stream button — use its own rect for correct positioning
+      const mobStream = document.getElementById('ap-mob-stream');
+      if (mobStream) mobStream.addEventListener('click', e => { e.stopPropagation(); openStreamPop(mobStream, null); });
     }
   }
 
   // ── Modal helpers ──────────────────────────────────────
-  function openPickModal() { document.getElementById('modal-pick-note').hidden = false; }
-  function closePickModal() { document.getElementById('modal-pick-note').hidden = true; }
+  function openPickModal() {
+    const el = document.getElementById('modal-pick-note');
+    if (window.innerWidth <= 767) {
+      el.hidden = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('pn-open')));
+    } else {
+      el.hidden = false;
+    }
+  }
+  function closePickModal() {
+    const el = document.getElementById('modal-pick-note');
+    if (window.innerWidth <= 767) {
+      el.classList.remove('pn-open');
+      el.querySelector('.modal').addEventListener('transitionend', () => {
+        el.hidden = true;
+      }, { once: true });
+    } else {
+      el.hidden = true;
+    }
+  }
 
   document.getElementById('pick-note-close').addEventListener('click', closePickModal);
   document.getElementById('pick-note-cancel').addEventListener('click', closePickModal);
@@ -875,6 +930,117 @@
       document.getElementById('page-main').innerHTML = '<p class="cp-empty">Failed to load album.</p>';
     }
   })();
+  </script>
+
+  <!-- Mobile album action sheet -->
+  <div class="sr-sheet-overlay" id="ap-sheet-overlay" hidden></div>
+  <div class="sr-sheet" id="ap-sheet" hidden>
+    <div class="sr-sheet-drag"></div>
+    <div class="sr-sheet-album" id="ap-sheet-album"></div>
+    <div class="sr-sheet-actions">
+      <button class="sr-sheet-btn" id="ap-sheet-recommend">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        Recommend
+      </button>
+      <button class="sr-sheet-btn" id="ap-sheet-crate">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>
+        Add to Collection
+      </button>
+      <button class="sr-sheet-btn" id="ap-sheet-ll">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,15"/></svg>
+        Add to Listen Later
+      </button>
+    </div>
+    <button class="sr-sheet-cancel-btn" id="ap-sheet-cancel">Cancel</button>
+  </div>
+  <script>
+    (function() {
+      const overlay = document.getElementById('ap-sheet-overlay');
+      const sheet   = document.getElementById('ap-sheet');
+      function openSheet() {
+        // Populate album header from rendered DOM
+        const cover  = document.querySelector('.ap-cover');
+        const title  = document.querySelector('.ap-title')?.textContent || '';
+        const artist = document.querySelector('.ap-artist')?.textContent || '';
+        const bg     = cover ? cover.style.backgroundImage : '';
+        const albumEl = document.getElementById('ap-sheet-album');
+        albumEl.innerHTML = `
+          <div class="sr-sheet-art" id="ap-sheet-art"></div>
+          <div class="sr-sheet-meta">
+            <p class="sr-sheet-title">${title}</p>
+            <p class="sr-sheet-artist">${artist}</p>
+          </div>`;
+        if (bg) albumEl.querySelector('#ap-sheet-art').style.backgroundImage = bg;
+        overlay.hidden = false; sheet.hidden = false;
+        requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add('sr-sheet--open')));
+      }
+      function closeSheet() {
+        sheet.classList.remove('sr-sheet--open');
+        sheet.addEventListener('transitionend', () => { sheet.hidden = true; overlay.hidden = true; }, { once: true });
+      }
+      // Use delegation — ap-mobile-plus is rendered async by renderPage()
+      document.body.addEventListener('click', e => {
+        if (e.target.closest('#ap-mobile-plus')) openSheet();
+      });
+      overlay.addEventListener('click', closeSheet);
+      document.getElementById('ap-sheet-cancel').addEventListener('click', closeSheet);
+      document.getElementById('ap-sheet-recommend').addEventListener('click', () => {
+        closeSheet();
+        document.getElementById('ap-rec-btn')?.click();
+      });
+      document.getElementById('ap-sheet-crate').addEventListener('click', () => {
+        closeSheet();
+        document.getElementById('ap-add-btn')?.click();
+      });
+      document.getElementById('ap-sheet-ll').addEventListener('click', () => {
+        closeSheet();
+        document.getElementById('ap-ll-btn')?.click();
+      });
+
+      // Mobile action bar wiring (rendered async by renderPage)
+      document.body.addEventListener('click', e => {
+        if (e.target.closest('#ap-mob-crate'))  document.getElementById('ap-add-btn')?.click();
+        if (e.target.closest('#ap-mob-ll'))     document.getElementById('ap-ll-btn')?.click();
+        if (e.target.closest('#ap-mob-rec'))    document.getElementById('ap-rec-btn')?.click();
+      });
+      // Sync active states from desktop buttons → mobile buttons
+      function syncMobileState(desktopId, mobileId, desktopClass, mobileClass) {
+        const d = document.getElementById(desktopId);
+        const m = document.getElementById(mobileId);
+        if (!d || !m) return;
+        new MutationObserver(() => m.classList.toggle(mobileClass, d.classList.contains(desktopClass)))
+          .observe(d, { attributes: true, attributeFilter: ['class'] });
+      }
+      // Called after renderPage resolves
+      function initMobileBarSync() {
+        syncMobileState('ap-add-btn', 'ap-mob-crate', 'btn-add--active', 'ap-mobile-act-btn--active');
+        syncMobileState('ap-ll-btn',  'ap-mob-ll',    'btn-ll--active',  'ap-mobile-act-btn--active');
+        const recD = document.getElementById('ap-rec-btn');
+        const recM = document.getElementById('ap-mob-rec');
+        if (recD && recM) {
+          function applyRecState() {
+            recM.disabled = recD.disabled;
+            if (recD.classList.contains('btn-pick--active')) {
+              recM.textContent = 'Your pick \u2713';
+              recM.classList.add('ap-mob-rec-btn--active');
+            }
+            if (recD.disabled && !recD.classList.contains('btn-pick--active')) {
+              recM.textContent = 'Already picked this week';
+            }
+          }
+          applyRecState(); // sync initial state
+          new MutationObserver(applyRecState).observe(recD, { attributes: true, attributeFilter: ['class', 'disabled'] });
+        }
+      }
+      // renderPage is async; poll briefly for the buttons to appear
+      (function waitForBar() {
+        if (document.getElementById('ap-mob-crate') || document.getElementById('ap-mob-rec')) {
+          initMobileBarSync();
+        } else {
+          setTimeout(waitForBar, 100);
+        }
+      })();
+    })();
   </script>
 </body>
 </html>

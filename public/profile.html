@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
-  <link rel="stylesheet" href="/style.css?v=141"/>
+  <link rel="stylesheet" href="/style.css?v=136"/>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -24,7 +24,7 @@
   <main class="page-container" id="page-main">
     <p class="ap-loading">Loading…</p>
   </main>
-  <script src="/js/common.js?v=5"></script>
+  <script src="/js/common.js?v=8"></script>
   <script>
   'use strict';
 
@@ -66,6 +66,7 @@
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
           </div>
+          <button class="profile-card-mobile-btn">···</button>
         </div>
         <div class="profile-card-body">
           <p class="profile-card-title">${esc(a.title)}</p>
@@ -95,7 +96,7 @@
     </div>`;
   }
 
-  function wireOverlayCard(card, removeUrl, removedKey, toastMsg) {
+  function wireOverlayCard(card, removeUrl, removedKey, toastMsg, actionLabel) {
     const { spotifyId, title, artist } = card.dataset;
 
     card.querySelector('.profile-card-play-btn').addEventListener('click', e => {
@@ -131,16 +132,37 @@
         if (!d[removedKey]) { card.remove(); showToast(toastMsg); }
       } catch {}
     });
+
+    const mobileBtn = card.querySelector('.profile-card-mobile-btn');
+    if (mobileBtn) {
+      mobileBtn.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        if (typeof window._openPcSheet === 'function') {
+          window._openPcSheet(
+            { spotifyId, title, artist, coverUrl: card.querySelector('.profile-card-cover')?.style.backgroundImage.slice(5, -2) || '' },
+            async () => {
+              try {
+                const r = await fetch(removeUrl, { method: 'POST' });
+                if (!r.ok) return;
+                const d = await r.json();
+                if (!d[removedKey]) { card.remove(); showToast(toastMsg); }
+              } catch {}
+            },
+            actionLabel || toastMsg
+          );
+        }
+      });
+    }
   }
 
   function wireOverlayCards(container, type) {
     if (type === 'crate') {
       container.querySelectorAll('.profile-card--crate').forEach(card =>
-        wireOverlayCard(card, `/crate/${encodeURIComponent(card.dataset.spotifyId)}`, 'inCrate', 'Removed from Collection')
+        wireOverlayCard(card, `/crate/${encodeURIComponent(card.dataset.spotifyId)}`, 'inCrate', 'Removed from Collection', 'Remove from Collection')
       );
     } else if (type === 'later') {
       container.querySelectorAll('.profile-card--crate').forEach(card =>
-        wireOverlayCard(card, `/listen-later/${encodeURIComponent(card.dataset.spotifyId)}`, 'inListenLater', 'Removed from Listen Later')
+        wireOverlayCard(card, `/listen-later/${encodeURIComponent(card.dataset.spotifyId)}`, 'inListenLater', 'Removed from Listen Later', 'Remove from Listen Later')
       );
     }
   }
@@ -394,7 +416,7 @@
   }
 
   (async () => {
-    const me = await initHeader({ active: null });
+    const me = await initHeader({ active: 'profile' });
     try {
       const r = await fetch(`/u/${encodeURIComponent(username)}`, {
         headers: { 'Accept': 'application/json' }
@@ -406,6 +428,79 @@
     } catch {
       document.getElementById('page-main').innerHTML = '<p class="cp-empty">Failed to load profile.</p>';
     }
+  })();
+  </script>
+
+  <!-- ── Profile card action sheet (mobile) ──────────────── -->
+  <div class="sr-sheet-overlay" id="pc-sheet-overlay" hidden></div>
+  <div class="sr-sheet" id="pc-sheet" hidden>
+    <div class="sr-sheet-drag"></div>
+    <div class="sr-sheet-album" id="pc-sheet-album"></div>
+    <div class="sr-sheet-actions">
+      <button class="sr-sheet-btn" id="pc-sheet-stream">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        Stream
+      </button>
+      <button class="sr-sheet-btn" id="pc-sheet-remove">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span id="pc-sheet-remove-label">Remove</span>
+      </button>
+    </div>
+    <button class="sr-sheet-cancel-btn" id="pc-sheet-cancel">Cancel</button>
+  </div>
+
+  <script>
+  (() => {
+    let _pcSheetAlbum = null;
+    let _pcSheetRemoveFn = null;
+
+    function openPcSheet(album, removeFn, removeLabel) {
+      _pcSheetAlbum  = album;
+      _pcSheetRemoveFn = removeFn;
+      document.getElementById('pc-sheet-remove-label').textContent = removeLabel;
+      const bg = album.coverUrl ? `style="background-image:url('${album.coverUrl}')"` : '';
+      document.getElementById('pc-sheet-album').innerHTML = `
+        <div class="sr-sheet-art" ${bg}></div>
+        <div class="sr-sheet-meta">
+          <p class="sr-sheet-title">${album.title}</p>
+          <p class="sr-sheet-artist">${album.artist}</p>
+        </div>`;
+      const overlay = document.getElementById('pc-sheet-overlay');
+      const sheet   = document.getElementById('pc-sheet');
+      overlay.hidden = false; sheet.hidden = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => sheet.classList.add('sr-sheet--open')));
+    }
+
+    function closePcSheet() {
+      const sheet   = document.getElementById('pc-sheet');
+      const overlay = document.getElementById('pc-sheet-overlay');
+      sheet.classList.remove('sr-sheet--open');
+      sheet.addEventListener('transitionend', () => {
+        sheet.hidden = true; overlay.hidden = true;
+        _pcSheetAlbum = null; _pcSheetRemoveFn = null;
+      }, { once: true });
+    }
+
+    document.getElementById('pc-sheet-overlay').addEventListener('click', closePcSheet);
+    document.getElementById('pc-sheet-cancel').addEventListener('click', closePcSheet);
+
+    document.getElementById('pc-sheet-stream').addEventListener('click', () => {
+      if (!_pcSheetAlbum) return;
+      closePcSheet();
+      const { spotifyId, title, artist } = _pcSheetAlbum;
+      const _isDz = String(spotifyId).startsWith('dz_');
+      const _q = encodeURIComponent(title + ' ' + artist);
+      const href = _isDz ? `https://open.spotify.com/search/${_q}` : `https://open.spotify.com/album/${spotifyId}`;
+      setTimeout(() => window.open(href, '_blank', 'noopener'), 200);
+    });
+
+    document.getElementById('pc-sheet-remove').addEventListener('click', () => {
+      const fn = _pcSheetRemoveFn;
+      closePcSheet();
+      if (fn) setTimeout(fn, 300);
+    });
+
+    window._openPcSheet = openPcSheet;
   })();
   </script>
 </body>
