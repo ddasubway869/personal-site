@@ -55,6 +55,7 @@ async function start() {
   }));
 
   app.use(express.static(path.join(__dirname, 'public')));
+  app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
   // ── Routes ──────────────────────────────────────────────
   app.use('/auth',            authRoutes);
@@ -109,13 +110,6 @@ async function start() {
     next();
   });
   app.use('/settings', settingsRoutes);
-
-  // Archive — members only
-  app.get('/archive', (req, res) => {
-    if (!req.session.userId) return res.redirect('/');
-    res.sendFile(path.join(__dirname, 'public', 'archive.html'));
-  });
-  app.use('/archive', archiveRoutes);
 
   // ── GET /stats — user stats for home screen ──────────────
   app.get('/stats', async (req, res) => {
