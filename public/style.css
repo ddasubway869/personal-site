@@ -4960,7 +4960,7 @@ html.light .cp-status-badge--resolved { color: #15803d; border-color: #15803d; b
   }
 
   /* Also recommended: 2-column grid with + button on cover */
-  .rp-grid-wrap { overflow: visible; -webkit-mask-image: none; mask-image: none; }
+  .rp-grid-wrap { overflow: hidden; -webkit-mask-image: none; mask-image: none; }
   .rp-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
