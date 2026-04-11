@@ -50,7 +50,7 @@ body, .site-header, input, textarea, button {
 }
 
 /* ── Base ───────────────────────────────────────────────── */
-html { font-size: 16px; }
+html { font-size: 16px; overflow-x: hidden; }
 body {
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 400;
@@ -799,6 +799,7 @@ html.light .icon-moon { display: block; }
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+  width: 100%;
 }
 .rp-grid-wrap::-webkit-scrollbar { display: none; }
 
