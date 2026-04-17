@@ -13,7 +13,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="ARVL"/>
   <script>if(sessionStorage.getItem('arvl_intro_done'))document.documentElement.classList.add('skip-intro');</script>
-  <link rel="stylesheet" href="style.css?v=136" />
+  <link rel="stylesheet" href="style.css?v=137" />
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -1046,7 +1046,7 @@
           el.hidden = true;
         }, { once: true });
       } else {
-        closePickNoteModal();
+        closeModal('modal-pick-note');
       }
     }
 

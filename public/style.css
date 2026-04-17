@@ -647,6 +647,7 @@ html.light .icon-moon { display: block; }
   overflow-x: hidden;
   overscroll-behavior: contain;
   width: 100%;
+  max-width: 480px;
   box-sizing: border-box;
 }
 .search-results[hidden] { display: none; }
@@ -4648,7 +4649,7 @@ html.light .cp-status-badge--resolved { color: #15803d; border-color: #15803d; b
   border: 1.5px solid var(--border);
   background: none;
   color: var(--text);
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
@@ -4860,6 +4861,9 @@ html.light .cp-status-badge--resolved { color: #15803d; border-color: #15803d; b
 
   /* Center brand on mobile */
   .brand { position: absolute; left: 50%; transform: translateX(-50%); }
+
+  /* On mobile: show Log in, hide the redundant Join the club pill */
+  #hdr-btn-join  { display: none; }
 
   /* Hamburger */
   .hdr-hamburger {
