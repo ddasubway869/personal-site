@@ -47,7 +47,7 @@ function isoWeekKey(date = new Date()) {
 const VALID_GENRES = new Set([
   'Hip-Hop', 'R&B / Soul', 'Pop', 'Rock', 'Electronic',
   'Jazz', 'Classical', 'Folk & Country', 'Metal', 'World',
-  'Ambient', 'Funk', 'Blues',
+  'Ambient', 'Funk', 'Blues', 'Punk',
 ]);
 
 // ── POST /recommend ───────────────────────────────────────

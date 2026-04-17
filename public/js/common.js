@@ -235,6 +235,7 @@ async function initHeader({ active = null } = {}) {
                   <button type="button" class="genre-pill" data-genre="Ambient">Ambient</button>
                   <button type="button" class="genre-pill" data-genre="Funk">Funk</button>
                   <button type="button" class="genre-pill" data-genre="Blues">Blues</button>
+                  <button type="button" class="genre-pill" data-genre="Punk">Punk</button>
                 </div>
               </div>
               <div class="genre-card" id="hdr-subgenre-card" style="display:none">
@@ -270,8 +271,8 @@ async function initHeader({ active = null } = {}) {
       'Hip-Hop':        ['Trap','Boom Bap','G-Funk','Drill','Conscious Rap','Mumble Rap','Lo-Fi Hip-Hop','Jazz Rap','Southern Rap','Crunk','Bounce','Emo Rap','Alternative','Experimental','Chillhop'],
       'R&B / Soul':     ['Contemporary R&B','Neo-Soul','New Jack Swing','Hip-Hop Soul','Trap-Soul','Alternative R&B','Doo-Wop'],
       'Pop':            ['Pop Rock','Electropop','Synth-Pop','Teen Pop','Dance-Pop','Disco-Pop','Indie Pop','Pop-R&B','Bedroom Pop','Traditional Pop','Psychedelic Pop'],
-      'Rock':           ['Classic Rock','Hard Rock','Punk Rock','Grunge','Post-Grunge','Alternative Rock','Indie Rock','Pop-Punk','Progressive Rock','Glam Rock','Electronic Rock','Post-Punk','New Wave','Shoegaze','Dream Pop','Math Rock'],
-      'Electronic':     ['House','Techno','Dubstep','Drum n Bass','Trance','Hardstyle','Trip-Hop','Downtempo','Experimental','Electro & Fusion'],
+      'Rock':           ['Classic Rock','Hard Rock','Grunge','Post-Grunge','Alternative Rock','Indie Rock','Pop-Punk','Progressive Rock','Glam Rock','Electronic Rock','New Wave','Shoegaze','Dream Pop','Math Rock'],
+      'Electronic':     ['House','Techno','Dubstep','Drum n Bass','Trance','Hardstyle','Trip-Hop','Downtempo','Experimental','Electro & Fusion','Folktronica'],
       'Jazz':           ['Dixieland','Swing','Bebop','Cool Jazz','Hard Bop','Modal Jazz','Fusion','Smooth Jazz','Latin Jazz','Free Jazz','Neo-Bop','Spiritual Jazz'],
       'Metal':          ['Thrash Metal','Death Metal','Black Metal','Progressive Metal','Metalcore','Groove Metal','Symphonic Metal','Nu Metal','Blackened Deathcore','Djent'],
       'Classical':      ['Baroque','Classical','Romantic','Modernism & Avant-Garde','Minimalism','Contemporary Classical'],
@@ -280,6 +281,7 @@ async function initHeader({ active = null } = {}) {
       'Ambient':        ['Dark Ambient','Drone','Nature Sounds','Space Ambient','Neo-Classical Ambient','Ambient Electronic'],
       'Funk':           ['P-Funk','Funk Rock','Go-Go','Boogie','Afrofunk','Jazz-Funk','Electrofunk'],
       'Blues':          ['Delta Blues','Chicago Blues','Texas Blues','Piedmont Blues','Jump Blues','Swamp Blues','Soul Blues','British Blues'],
+      'Punk':           ['Hardcore','Post-Hardcore','Post-Punk','Goth','Crust Punk','Horror Punk','Pop-Punk','Emo','Skate Punk','Street Punk','Anarcho-Punk','Psychobilly'],
     };
 
     // Lazy-load pick/crate state (fires once on first panel open)
