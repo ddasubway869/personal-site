@@ -3,6 +3,7 @@ const express     = require('express');
 const router      = express.Router();
 const { getDb }   = require('../db');
 const scheduler   = require('../lib/scheduler');
+const deleteUser  = require('../lib/deleteUser');
 
 function requireSecret(req, res, next) {
   if (req.query.secret !== process.env.SESSION_SECRET) {
@@ -807,11 +808,7 @@ router.post('/users/:id/toggle-email', requireAdmin, async (req, res) => {
 });
 
 // ── DELETE /admin/users/:id ───────────────────────────────
-// Permanently deletes an account. Picks, comments, likes, follows, community
-// posts, tokens etc. are removed via ON DELETE CASCADE; feedback is kept but
-// anonymised (ON DELETE SET NULL). Their login sessions and email log entries
-// are removed too, and since every email is sent from the users table they
-// will receive nothing further.
+// Permanently deletes an account (see lib/deleteUser.js for what's removed).
 router.delete('/users/:id', requireAdmin, async (req, res) => {
   const userId = Number(req.params.id);
   if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Invalid user id.' });
@@ -819,21 +816,12 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: "You can't delete your own account from here." });
   }
 
-  const db = await getDb();
   try {
-    const user = await db.get('SELECT id, email FROM users WHERE id = ?', userId);
-    if (!user) return res.status(404).json({ error: 'User not found.' });
-
-    await db.exec('BEGIN');
-    await db.run(`DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?`, userId);
-    await db.run('DELETE FROM email_logs WHERE recipient = ?', user.email);
-    await db.run('DELETE FROM users WHERE id = ?', userId);
-    await db.exec('COMMIT');
-
+    const deleted = await deleteUser(userId);
+    if (!deleted) return res.status(404).json({ error: 'User not found.' });
     console.log(`[admin] Permanently deleted user ${userId}`);
     res.json({ ok: true });
   } catch (err) {
-    await db.exec('ROLLBACK').catch(() => {});
     console.error('Admin delete user error:', err.message);
     res.status(500).json({ error: 'Server error.' });
   }

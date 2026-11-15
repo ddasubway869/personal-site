@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
   <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)"/>
   <meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)"/>
-  <link rel="stylesheet" href="/style.css?v=136"/>
+  <link rel="stylesheet" href="/style.css?v=137"/>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -85,6 +85,29 @@
           <button class="btn btn-submit" id="s-save">Save changes</button>
           <p class="form-status" id="s-status" aria-live="polite"></p>
         </div>
+
+        <!-- Delete account -->
+        <section class="settings-section settings-danger">
+          <h2 class="settings-section-title">Delete account</h2>
+          <p class="settings-danger-text">
+            Permanently delete your ARVL account, including your picks, comments, likes,
+            follows and community posts. You'll stop receiving all emails from us.
+            This can't be undone.
+          </p>
+          <button class="btn btn-danger" id="s-delete-open">Delete my account…</button>
+
+          <div class="settings-danger-form" id="s-delete-form" hidden>
+            <div class="field">
+              <label for="s-delete-pass">Enter your password to confirm</label>
+              <input type="password" id="s-delete-pass" autocomplete="current-password"/>
+            </div>
+            <div class="settings-danger-actions">
+              <button class="btn btn-danger" id="s-delete-confirm">Permanently delete my account</button>
+              <button class="btn btn-ghost" id="s-delete-cancel">Cancel</button>
+            </div>
+            <p class="form-status" id="s-delete-status" aria-live="polite"></p>
+          </div>
+        </section>
       </div>
     `;
 
@@ -122,6 +145,55 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Save changes';
+      }
+    });
+
+    // Delete account
+    const delOpen    = document.getElementById('s-delete-open');
+    const delForm    = document.getElementById('s-delete-form');
+    const delPass    = document.getElementById('s-delete-pass');
+    const delConfirm = document.getElementById('s-delete-confirm');
+    const delStatus  = document.getElementById('s-delete-status');
+
+    delOpen.addEventListener('click', () => {
+      delOpen.style.display = 'none';
+      delForm.hidden = false;
+      delPass.focus();
+    });
+    document.getElementById('s-delete-cancel').addEventListener('click', () => {
+      delForm.hidden = true;
+      delOpen.style.display = '';
+      delPass.value  = '';
+      delStatus.textContent = ''; delStatus.className = 'form-status';
+    });
+    delPass.addEventListener('keydown', e => { if (e.key === 'Enter') delConfirm.click(); });
+
+    delConfirm.addEventListener('click', async () => {
+      delStatus.textContent = ''; delStatus.className = 'form-status';
+      if (!delPass.value) {
+        delStatus.textContent = 'Enter your password to confirm.';
+        delStatus.className = 'form-status err';
+        return;
+      }
+      if (!confirm('Last check: permanently delete your ARVL account? This cannot be undone.')) return;
+
+      delConfirm.disabled = true;
+      delConfirm.textContent = 'Deleting…';
+      try {
+        const r = await fetch('/settings/delete-account', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: delPass.value }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Something went wrong.');
+        sessionStorage.clear();
+        location.href = '/';
+      } catch (err) {
+        delStatus.textContent = err.message;
+        delStatus.className = 'form-status err';
+        delConfirm.disabled = false;
+        delConfirm.textContent = 'Permanently delete my account';
       }
     });
 
