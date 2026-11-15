@@ -343,6 +343,7 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
             <th>Supporter</th>
             <th>Emails</th>
             <th>Joined</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -376,6 +377,14 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
               >${u.email_opt_out ? 'Opted out' : 'Subscribed'}</button>
             </td>
             <td>${u.joined}</td>
+            <td>
+              <button
+                class="user-delete-btn"
+                data-user-id="${u.id}"
+                data-email="${esc(u.email)}"
+                style="background:none;border:1px solid var(--border);border-radius:6px;padding:.2rem .6rem;font-size:.75rem;cursor:pointer;color:#ef5350;font-family:inherit;transition:all .15s;"
+              >Delete</button>
+            </td>
           </tr>`).join('')}
         </tbody>
       </table>`}
@@ -614,6 +623,37 @@ router.get('/dashboard', requireAdmin, async (req, res) => {
       });
     });
 
+    // Permanent account deletion
+    document.querySelectorAll('.user-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.dataset.userId;
+        const email  = btn.dataset.email;
+        const typed  = prompt(
+          'Permanently delete this account?\\n\\n' +
+          'This removes the member, all their picks, comments, likes, follows and community posts, ' +
+          'and they will never receive another email. This cannot be undone.\\n\\n' +
+          'Type their email to confirm:\\n' + email
+        );
+        if (typed === null) return;
+        if (typed.trim().toLowerCase() !== email.toLowerCase()) {
+          alert('Email did not match. Nothing was deleted.');
+          return;
+        }
+        btn.disabled    = true;
+        btn.textContent = '…';
+        try {
+          const r = await fetch('/admin/users/' + userId, { method: 'DELETE' });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(d.error || 'Failed to delete account.');
+          document.getElementById('user-row-' + userId)?.remove();
+        } catch (err) {
+          alert(err.message);
+          btn.disabled    = false;
+          btn.textContent = 'Delete';
+        }
+      });
+    });
+
     function openGenreEdit(btn) {
       const cell = btn.closest('.genre-edit-cell');
       cell.querySelector('.genre-current').style.display = 'none';
@@ -762,6 +802,39 @@ router.post('/users/:id/toggle-email', requireAdmin, async (req, res) => {
     res.json({ emailOptOut: !!newVal });
   } catch (err) {
     console.error('toggle-email error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ── DELETE /admin/users/:id ───────────────────────────────
+// Permanently deletes an account. Picks, comments, likes, follows, community
+// posts, tokens etc. are removed via ON DELETE CASCADE; feedback is kept but
+// anonymised (ON DELETE SET NULL). Their login sessions and email log entries
+// are removed too, and since every email is sent from the users table they
+// will receive nothing further.
+router.delete('/users/:id', requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (req.session?.userId === userId) {
+    return res.status(400).json({ error: "You can't delete your own account from here." });
+  }
+
+  const db = await getDb();
+  try {
+    const user = await db.get('SELECT id, email FROM users WHERE id = ?', userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    await db.exec('BEGIN');
+    await db.run(`DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?`, userId);
+    await db.run('DELETE FROM email_logs WHERE recipient = ?', user.email);
+    await db.run('DELETE FROM users WHERE id = ?', userId);
+    await db.exec('COMMIT');
+
+    console.log(`[admin] Permanently deleted user ${userId}`);
+    res.json({ ok: true });
+  } catch (err) {
+    await db.exec('ROLLBACK').catch(() => {});
+    console.error('Admin delete user error:', err.message);
     res.status(500).json({ error: 'Server error.' });
   }
 });
