@@ -1,7 +1,9 @@
 'use strict';
 const express     = require('express');
 const { getDb }   = require('../db');
+const bcrypt      = require('bcryptjs');
 const requireAuth = require('../middleware/requireAuth');
+const deleteUser  = require('../lib/deleteUser');
 
 const router = express.Router();
 
@@ -44,5 +46,31 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
+// POST /settings/delete-account — member permanently deletes their own account.
+// Requires their current password.
+router.post('/delete-account', requireAuth, async (req, res) => {
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: 'Enter your password to confirm.' });
+
+  try {
+    const db   = await getDb();
+    const user = await db.get('SELECT id, password_hash FROM users WHERE id = ?', req.session.userId);
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ error: 'Incorrect password.' });
+
+    await deleteUser(user.id);
+    console.log(`[settings] User ${user.id} deleted their own account`);
+
+    req.session.destroy(() => {
+      res.clearCookie('connect.sid');
+      res.json({ ok: true });
+    });
+  } catch (err) {
+    console.error('POST /settings/delete-account', err.message);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
 
 module.exports = router;

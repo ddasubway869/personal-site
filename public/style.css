@@ -4498,6 +4498,33 @@ html.light .cp-status-badge--resolved { color: #15803d; border-color: #15803d; b
   margin-top: 1.5rem;
 }
 
+/* ── Delete account ─────────────────────────────────────── */
+.settings-danger {
+  margin-top: 3rem;
+  border-color: color-mix(in srgb, var(--error) 45%, var(--border));
+}
+.settings-danger-text {
+  font-size: .875rem;
+  color: var(--subtle);
+  line-height: 1.5;
+  margin: 0 0 1rem;
+}
+.settings-danger-form { margin-top: 1rem; }
+.settings-danger-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: center;
+}
+.btn-danger {
+  background: transparent;
+  border-color: var(--error);
+  color: var(--error);
+}
+.btn-danger:hover    { background: var(--error); color: var(--bg); }
+.btn-danger:disabled { opacity: .5; cursor: not-allowed; }
+.settings-danger .form-status { text-align: left; }
+
 /* ── Profile hero additions ─────────────────────────────── */
 .up-hero-bio {
   font-size: .85rem;
