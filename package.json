@@ -14,11 +14,11 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^10.6.0",
     "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1",
+    "sqlite3": "^5.1.7",
     "stripe": "^20.4.1"
   },
   "devDependencies": {
-    "sharp": "^0.35.5"
+    "sharp": "^0.34.5"
   },
   "engines": {
     "node": ">=20 <23"
